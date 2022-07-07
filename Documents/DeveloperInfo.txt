@@ -1,0 +1,112 @@
+MWLab Programming Tips:
+
+Current version (1/2017) of MWLab Analysis programs use the following conventions:
+
+loadFile_MWLab: loads a single file with image data 
+  MWfile.type - data type: scanimage, scanbox, neuroplex, prairie, or standard tiff
+        .name - filename
+        .dir - path
+        .im - image stack, for two-channel images this is a cell im{1}=channel1, im{2}=channel2
+	.size - (sometimes, but not always present)
+        .frames - # of image frames
+        .frameRate - #frames/sec
+        .isAligned - binary, 1 means image has been aligned using .align file
+        .aligned - alignment data, includes timeframe shifts and mean aligned image
+        .aux1 - auxillary stimulus signal, aux1 is ODOR usually
+        .aux2 - auxillary stimulus signal, aux2 is SNIFF usually
+	.aux3 - auxillary stimulus signal, aux3 is MULTIODOR usually (8-bit binary signal w/odor # identifier)
+
+ImageAnalysis_MWLab: Image Analysis GUI w/ ROI(region-of-interest) drawing
+        Handles multiple files, but only loads 1 image at-a-time to reduce memory load. Hence, no IAdata.file.im
+  IAdata.file().name
+        .file().dir
+        .type (only 1 data type allowed currently, mainly since scanimage and scanbox images are different sizes)
+        .currentimage - current loaded image or average if >1 selected (select file(s) and click "load selected")
+		for two-channel data, currentimage is a cell as described above
+        .currentimagename - description of current image
+        .currentframeRate - frameRate of currentimage (used for define stimulus)
+        .currentisAligned - binary, 1 means current image is aligned
+        .currentAux1 - current aux1 or average if >1 file selected
+        .currentAux2 - current aux2 or average if >1 file selected
+        .currentAux3 - current aux3 or average if >1 file selected (this may cause errors!)
+	.def_stimulus - manually defined stimulus (more info below**)
+        .roi().mask - binary mask images, 1 = in, 0 = out
+
+TimeSeriesAnalysis_MWLab: Time Series Analysis GUI w/ability to open multiple plot windows
+	Capable of handling files with different frameRates and #frames using interpolation of needed/desired.
+	Also, ability to look at individual odor trials, and superimpose or average them by file/roi/odor/trial
+	Also, uses separate aux signals for each file, but def_stimulus is shared.
+	Two-channel data is separated into files for each channel, with "_ch1" or "_ch2" added to file name (after image is loaded)
+  TSdata.file().(type,dir,name,frames,frameRate,aux1,aux2) - as above
+        .file().roi().(time,series) the time and fluorescence signal vectors: mean of pixel values for roi(n).mask in each time frame
+	.roi().mask - required to compute time series data 
+  Data output options:
+	TSdata - saves entire struck used by all plot windows w/ all time series whether or not plotted
+	plotdata - saves only data used in current plot window. includes:
+	plotdata.file().name - so you know which file was selected
+	plotdata.file().roi().(number,time,series) - so you know which roiS were selected, and full time series data
+	plotdata.file().roi().odor().number - which odor
+	plotdata.file().roi().odor().trial().(number,time,series) - which trials, with time series data in pre-post stimulus window
+	or, plotdata can be output as cell structure, but only the labels showing on plot are included.
+		this would look like: myplotdata.(XData,YData,Label)
+(IAdata,TSdata,plotdata).def_stimulus (manually defined stimulus signal)
+	may include:
+	data.*_stimulus.signal:	binary signal 1=on, 0=off
+	data.*_stimulus.times:	times(sec)
+	data.*_stimulus.delay:	time (sec) before stimulus first turns on
+	data.*_stimulus.duration:	time (sec) stimulus stays on
+	data.*_stimulus.interval:	time (sec) between stimulus off and on again
+	data.*_stimulus.trials:	# of times stimulus repeats
+(IAdata,TSdata,plotdata).file.aux_combo (combined stimulus signal - sniffs during odor)
+	*remember to select pre-stimulus and post-stimulus so you only get 1 sniff per trial!
+
+MapsAnalysis_MWLab: Maps Analysis is a program for creating/saving/analyzing "difference maps",
+    which are images  based on averaging some time frames before (baseline) and during/after (response)
+    a stimulus signal such as an odor.  The data is stored in it's most basic form so that different types
+    of maps can be created from them - such as deltaF, deltaF/F, etc. The function makeMaps.m does this, and
+    requires the following inputs: imagedata, stim2use, baseTimes, respTimes. MapsData is organized using the
+    odortrial system similar to that developed in TimeSeriesAnalysis. Data for displayed figures is saved in
+    global variable called figdata.
+
+	MapsData global variable - struct used to store all basic maps data
+        MapsData.stim2use %which stimulus signal used to generate maps
+        MapsData.basetimes %times relative to stimulus TTL signal used to generate baseline images
+        MapsData.resptimes %times relative to stimulus TTL signal used to generate response images
+        MapsData.file %note: channels become separate files
+            MapsData.file().type %original data file
+            MapsData.file().name %original data file
+            MapsData.file().dir %original data file
+            MapsData.file().odors() %odor #s
+            MapsData.file().odor
+                MapsData.file().odor().trials() %starts at 1 for each odor, only includes valid trials
+                MapsData.file().odor().trial
+                MapsData.file().odor().trial().baseim
+                MapsData.file().odor().trial().baseframes
+                MapsData.file().odor().trial().respim
+                MapsData.file().odor().trial().respframes
+        MapsData.roi
+            MapsData.roi().mask
+	figdata{} global variable - used to store current figure images,titles,details
+            figdata{1}.im
+            figdata{1}.title{}. %text field for use in figures and saved in Tiff Tag "ImageDescription"
+            figdata{1}.details{}. %text field to be saved in Tiff Tag
+            figdata{1}.ImageDescription - used to save as Tifs, includes file/odor/trial info plus image filter settings
+
+
+Other Notes: Scanimage data is recorded as int16 as of version 5.0, and includes negative values. In order to avoid problems
+	in deltaF/F calculations and to be consistent with other data, we convert to uint16 in loadScanimage.m by subtracting
+	the median of the minimum values in each of the first 60 timeframes(~4s at 15 frames/s). Additional background subtraction
+	can be done by selecting an ROI in an inactive area. Note that this could lead to problems if there is a strong negative
+	shift in the baseline fluorescence signal, and should always be kept in mind as a potential source of errors.
+
+	Tif images are slow to load due to file format. So, we came up with (.dat/.mat) format which is very fast to load and similar
+	to the scanbox .sbx/.mat format. We agreed to store the original scanimage .tif data on the server... but, if you plan to 
+	load the scanimage files several times for analysis it is much faster to convert them to the .dat/.mat format for temporary
+	analysis purposes. We just want to avoid storing multiple copies of the same (large) data files on the server - so only keep
+	the original .tifs for long term archiving.
+
+	Multi-odor coded auxiliary signal includes an initial spike to indicate odor coming on, followed by a series of 8 x 0.25sec
+	time windows in which a voltage spike may be present or not (1 or 0). This 8bit code is converted to a uint8 (0-255) number
+	corresponding which odor is present from a master list of odors (ask Matt).
+
+    These programs may benefit from a rewrite using an Object-Oriented programming style.
