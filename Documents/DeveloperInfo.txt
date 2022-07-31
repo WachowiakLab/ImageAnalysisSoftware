@@ -1,4 +1,4 @@
-MWLab Programming Tips:
+Additional info on code for would-be developers:
 
 Current version (1/2017) of MWLab Analysis programs use the following conventions:
 
