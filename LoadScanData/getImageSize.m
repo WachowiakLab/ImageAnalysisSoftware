@@ -45,7 +45,7 @@ switch datatype
                     frames = 0;
                     while true
                         frames = frames + 1;
-                        if tmptiff.lastDirectory(), break; end;
+                        if tmptiff.lastDirectory(), break; end
                         try tmptiff.nextDirectory(); catch; break; end
                     end
                     frames = frames/numChannels;
@@ -105,14 +105,33 @@ switch datatype
         rows = info(1).Height;
         columns = info(1).Width;
         if nargout >2; varargout{1} = length(iminfo.PVScan.Sequence.Frame); end
-    case  typestr{4} %'neuroplex' % 'Neuroplex .da'
-        sizeA = 2560; % # of integers of header info
-        fid = fopen(imfile);
-        header = fread(fid, sizeA, 'int16');
-        fclose(fid);
-        rows = header(385);
-        columns = header(386);
-        if nargout >2; varargout{1} = header(5); end
+    case  typestr{4} %'neuroplex'
+        if strcmp(imfile(end-2:end),'.da')
+            sizeA = 2560; % # of integers of header info
+            fid = fopen(imfile);
+            header = fread(fid, sizeA, 'int16');
+            fclose(fid);
+            rows = header(385);
+            columns = header(386);
+            if nargout >2; varargout{1} = header(5); end
+        else % neuroplex .tsm file
+            sizeA = 2880; % # of integers of header info
+            fid = fopen(imfile);
+            header = fread(fid, sizeA,'uint8=>char');
+            fclose(fid);
+            %convert header to iminfo
+            for i = 1:36
+                %headers consist of 36x80byte "cards" w/keyword, value, (optional comment)
+                %last keyword is "END", the rest of header is empty
+                ctmp = textscan(header(i*80-79:i*80),'%s %s','Delimiter','=');
+                if ~isempty(ctmp{1}) && ~isequal(strip(ctmp{1}{1}),'END')
+                    iminfo.(strip(ctmp{1}{1})) = strip(ctmp{2}{1});
+                end
+            end
+            rows = str2double(iminfo.NAXIS1);
+            columns = str2double(iminfo.NAXIS2);
+            if nargout >2; varargout{1} = str2double(iminfo.NAXIS3); end
+        end
     case  typestr{5} %'tif' % Standard .tif
         info=imfinfo(imfile,'tif');
         rows = info(1).Height;

@@ -40,7 +40,7 @@ if strcmp(imfile(end-2:end),'.da')
         bnc(s,:) = dat(cnt:cnt-1+(bncRatio*iminfo.frames));
         cnt = cnt+bncRatio*iminfo.frames;
     end
-else   %this is if *.tsm file
+else
     sizeA = 2880; % # of integers of header info
     [tmppath,tmpname,~] = fileparts(imfile);
     tsmfid = fopen(fullfile(tmppath,[tmpname,'.tsm']));
@@ -111,7 +111,7 @@ ephys.times = ephys.times(1:end-1);
 varargout = cell(1,nargout-2);
 if ~isempty(bnc)
     if nargin>1; aux2bncmap = varargin{1}; else; aux2bncmap = assignNeuroplexBNC; end
-    assignin('base','aux2bncmap',aux2bncmap);
+    %assignin('base','aux2bncmap',aux2bncmap);
     %AUX1 is the odor on/off signal
     %binarizes odor on/off signal.
     if aux2bncmap(1) > 0
@@ -120,27 +120,20 @@ if ~isempty(bnc)
         %need to resample to 150 Hz:
         tmp1 = qprctile(bnc(aux2bncmap(1),:),[1 99.9]);
         %AUX1 = bnc(aux2bncmap(1),:)>tmp1(1)+0.25*(tmp1(2)-tmp1(1));
-        AUX1 = bnc(aux2bncmap(1),:)>threshold;        
-        aux1.times = 0:1/150:iminfo.frames/iminfo.frameRate; %resample to 150Hz  
-        AUX1times=0:deltaT/bncRatio:iminfo.frames/iminfo.frameRate;  %generate timepts for aux1 signal
-        aux1.signal=interp1(AUX1times,[0, double(AUX1)],aux1.times,'previous');   %mw added - alternate way.
-        % aux1.signal = zeros(1,length(aux1.times));
-        % for i = 2:length(AUX1)   %a weird way to do this, but binarizes signal and puts into aux1 times...generates a warning, should prob fix.
-        %     % if AUX1(i)
-        %     %     aux1.signal(int16(i*deltaT/bncRatio):int16((i+1)*deltaT/bncRatio))
-        % 
-        %     if AUX1(i)>AUX1(i-1) %on
-        %         tmp = find(aux1.times>=i*deltaT/bncRatio);
-        %         aux1.signal(tmp:end) = 1;
-        %     elseif AUX1(i)<AUX1(i-1) %off
-        %         tmp = find(aux1.times>=i*deltaT/bncRatio);
-        %         aux1.signal(tmp:end) = 0;
-        %     end
-        % end
-        
+        AUX1 = bnc(aux2bncmap(1),:)>threshold;
+        aux1.times = 0:1/150:iminfo.frames/iminfo.frameRate; %resample to 150Hz
+        aux1.signal = zeros(1,length(aux1.times));
+        for i = 2:length(AUX1)
+            if AUX1(i)>AUX1(i-1) %on
+                tmp = find(aux1.times>=i*deltaT/bncRatio);
+                aux1.signal(tmp:end) = 1;
+            elseif AUX1(i)<AUX1(i-1) %off
+                tmp = find(aux1.times>=i*deltaT/bncRatio);
+                aux1.signal(tmp:end) = 0;
+            end
+        end
         varargout{1} = aux1;
     end
-   
     %AUX2 is the sniff on/off signal or valence signal (ephys)
     if aux2bncmap(2) > 0
         ephys.valence=interp1(ephys.origtimes,bnc(aux2bncmap(2),:),ephys.times);
@@ -151,19 +144,18 @@ if ~isempty(bnc)
         AUX2 = bnc(aux2bncmap(2),:)>threshold;
         aux2.times = 0:1/150:iminfo.frames/iminfo.frameRate; %resample to 150Hz
         aux2.signal = zeros(1,length(aux2.times));
-        AUX2times=0:deltaT/bncRatio:iminfo.frames/iminfo.frameRate;  %generate timepts for aux1 signal
-        aux2.signal=interp1(AUX2times,[0, double(AUX2)],aux2.times,'previous');   %mw added - alternate way.
-        % for i = 2:length(AUX2)
-        %     if AUX2(i)>AUX2(i-1) %on
-        %         tmp = find(aux2.times>=i*deltaT/bncRatio);
-        %         aux2.signal(tmp:end) = 1;
-        %     elseif AUX2(i)<AUX2(i-1) %off
-        %         tmp = find(aux2.times>=i*deltaT/bncRatio);
-        %         aux2.signal(tmp:end) = 0;
-        %     end
-        % end
+        for i = 2:length(AUX2)
+            if AUX2(i)>AUX2(i-1) %on
+                tmp = find(aux2.times>=i*deltaT/bncRatio);
+                aux2.signal(tmp:end) = 1;
+            elseif AUX2(i)<AUX2(i-1) %off
+                tmp = find(aux2.times>=i*deltaT/bncRatio);
+                aux2.signal(tmp:end) = 0;
+            end
+        end
         varargout{2} = aux2;
     end
+    
     
     %assignin('base','aux3',aux3);
     %AUX3 is the multiodor spike signal or licking signal (for ephys)
@@ -177,9 +169,9 @@ if ~isempty(bnc)
         if aux2bncmap(5) == 1  %this will encode valence into odor ID 
             odorIDflag=1; %just set marker to odor ID encoding
             if max(aux2.signal) > 0
-                onindices=find(diff(aux1.signal) == 1); %find start indices of odor onset (in case are multiple odor pulses)
-                aux3.signal(onindices)=1; %this signals odor on. 
-                aux3.signal(onindices+16)=1; % should make odor code = 1
+                onindex=find(aux1.signal,1); %find start index of odor onset
+                aux3.signal(onindex)=1; %this signals odor on. 
+                aux3.signal(onindex+16)=1; % should make odor code = 1
             end
         end
         if odorIDflag
@@ -252,27 +244,22 @@ if ~isempty(bnc)
         AUX4 = bnc(aux2bncmap(4),:)>threshold;
         aux4.times = 0:1/150:iminfo.frames/iminfo.frameRate; %resample to 150Hz
         aux4.signal = zeros(1,length(aux4.times));
-        AUX4times=0:deltaT/bncRatio:iminfo.frames/iminfo.frameRate;  %generate timepts for aux signal
-        aux4.signal=interp1(AUX4times,[0, double(AUX4)],aux4.times,'previous');   %mw added - alternate way.        
-        %still not sure why binarizing signal in line above, but keep for now.
-        % for i = 2:length(AUX4)   %not sure why this section is here! Binarizes sniff signal??
-        %     if AUX4(i)>AUX4(i-1) %on
-        %         tmp = find(aux4.times>=i*deltaT/bncRatio);
-        %         aux4.signal(tmp:end) = 1;
-        %     elseif AUX4(i)<AUX4(i-1) %off
-        %         tmp = find(aux4.times>=i*deltaT/bncRatio);
-        %         aux4.signal(tmp:end) = 0;
-        %     end
-        % end
+        for i = 2:length(AUX4)
+            if AUX4(i)>AUX4(i-1) %on
+                tmp = find(aux4.times>=i*deltaT/bncRatio);
+                aux4.signal(tmp:end) = 1;
+            elseif AUX4(i)<AUX4(i-1) %off
+                tmp = find(aux4.times>=i*deltaT/bncRatio);
+                aux4.signal(tmp:end) = 0;
+            end
+        end
         varargout{4} = aux4;
         else
         varargout{4} = [];
     end
-    
-    if aux2bncmap(6) > 0
-        ephys.velocity=interp1(ephys.origtimes,bnc(aux2bncmap(6),:),ephys.times);
-    end
-
+    %%%%end MW added part
+%     assignin('base','ephystest',ephys);
+%     assignin('base','aux4',aux4);
     varargout{5}=ephys;
     
     %TCR:March,2023 - set up valence to odor conversion here! Just

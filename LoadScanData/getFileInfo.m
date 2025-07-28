@@ -55,49 +55,86 @@ switch datatype
     case typestr{2} %'scanbox' %Scanbox .sbx
         imfile = imfile(1:end-4);
         [~,sbxinfo] = mysbxread(imfile,0,0);
-        metastr = evalc('sbxinfo');
+        %metastr = evalc('sbxinfo'); omitted by MW. This is silly.
+        metastr=['file info: ', newline];
         tmpfields = fields(sbxinfo);
+        %assignin('base','sbxinfo',sbxinfo);  %mwadded
         for f=1:length(tmpfields)
 %             if ~isstruct(sbxinfo.(tmpfields{f}))
 %                 metastr = [metastr sprintf('sbxinfo.%s: ',tmpfields{f}) sprintf(' %s',string(sbxinfo.(tmpfields{f}))) newline];
 %             end %this shows too much ttl stuff for sbxinfo.(frame,line,event_id)
             if strcmp(tmpfields{f},'config')
-                tmpsubfields = fields(sbxinfo.(tmpfields{f}));
-                for i = 1:length(tmpsubfields)
-                    metastr = [metastr sprintf('sbxinfo.%s.%s: ',tmpfields{f},tmpsubfields{i}) ...
-                        sprintf(' %s',string(sbxinfo.(tmpfields{f}).(tmpsubfields{i}))) newline];
-                end
-            elseif strcmp(tmpfields{f},'calibration')
-                tmpsubfields = fields(sbxinfo.(tmpfields{f}));
-                for i = 1:length(tmpsubfields)
-                    metastr = [metastr sprintf('sbxinfo.%s(%d).%s: ',tmpfields{f},sbxinfo.config.magnification,tmpsubfields{i}) ...
-                        sprintf(' %s',string(sbxinfo.(tmpfields{f})(sbxinfo.config.magnification).(tmpsubfields{i}))) newline];
-                end
+                %tmpsubfields = fields(sbxinfo.(tmpfields{f}));
+                sbxconfig=sbxinfo.config;
+                %for i = 1:length(tmpsubfields)
+%                     metastr = [metastr sprintf('sbxinfo.%s.%s: ',tmpfields{f},tmpsubfields{i}) ...
+%                         sprintf(' %s',string(sbxinfo.(tmpfields{f}).(tmpsubfields{i}))) newline];
+                metastr = [metastr, sprintf('wavelength: %d', sbxconfig.wavelength) ,newline];
+                %mag=sbxconfig.magnification_list(sbxconfig.magnification);
+                metastr = [metastr, sprintf('zoom: %s', sbxconfig.magnification_list(sbxconfig.magnification,:)) ,newline];
+                metastr = [metastr, sprintf('xpos: %.2f', sbxconfig.knobby.pos.x) ,newline];
+                metastr = [metastr, sprintf('ypos: %.2f', sbxconfig.knobby.pos.y) ,newline];
+                metastr = [metastr, sprintf('zpos: %.2f', sbxconfig.knobby.pos.z) ,newline];
+                metastr = [metastr, sprintf('angle: %.2f', sbxconfig.knobby.pos.a) ,newline];
+               % end
+%             elseif strcmp(tmpfields{f},'calibration')
+%                 tmpsubfields = fields(sbxinfo.(tmpfields{f}));
+%                 for i = 1:length(tmpsubfields)
+%                     metastr = [metastr sprintf('sbxinfo.%s(%d).%s: ',tmpfields{f},sbxinfo.config.magnification,tmpsubfields{i}) ...
+%                         sprintf(' %s',string(sbxinfo.(tmpfields{f})(sbxinfo.config.magnification).(tmpsubfields{i}))) newline];
+%                 end
             end
+         if strcmp(tmpfields{f},'usernotes')
+             metastr = [metastr, sbxinfo.usernotes];
+         end
         end
         set(metadata_box,'String',metastr,'ListboxTop',1);
     case typestr{3} %'prairie' %Prairie .xml
         %warndlg('Metadata not available');
-    case typestr{4} %'neuroplex' %Neuroplex .da
-        %see: http://www.redshirtimaging.com/support/dfo.html for info on Neuroplex
-        sizeA = 2560; % # of integers of header info
-        fid = fopen(imfile);
-        header = fread(fid, sizeA, 'int16');
-        metastr = sprintf('Frames = %d\n',header(5));
-        metastr = [metastr sprintf('Rows = %d\n',header(386))];
-        metastr = [metastr sprintf('Columns = %d\n',header(385))];
-        deltaT = header(389); 
-        if deltaT >= 10; deltaT = deltaT*header(391); end %note: header(391) is called the "dividing factor"
-        deltaT = deltaT/1000000;%microsec to sec
-        frameRate = 1/deltaT;
-        metastr = [metastr sprintf('Frame Rate = %3.3f /sec\n',frameRate)];
-        %read comment
-        metastr = [metastr sprintf('Comments:\n')];
-        fseek(fid,256,'bof');
-        metastr = [metastr char((fread(fid,159,'char',1))')]; %Added text can be as long as 257 bytes (this code is from read_NP.m)
-        fclose(fid);
-        set(metadata_box,'String',metastr,'ListboxTop',1);
-        %warndlg('Metadata not available');
+    case typestr{4} %'neuroplex'
+        if strcmp(imfile(end-2:end),'.da')
+            %see: http://www.redshirtimaging.com/support/dfo.html for info on Neuroplex
+            sizeA = 2560; % # of integers of header info
+            fid = fopen(imfile);
+            header = fread(fid, sizeA, 'int16');
+            metastr = sprintf('Frames = %d\n',header(5));
+            metastr = [metastr sprintf('Rows = %d\n',header(386))];
+            metastr = [metastr sprintf('Columns = %d\n',header(385))];
+            deltaT = header(389); 
+            if deltaT >= 10; deltaT = deltaT*header(391); end %note: header(391) is called the "dividing factor"
+            deltaT = deltaT/1000000;%microsec to sec
+            frameRate = 1/deltaT;
+            metastr = [metastr sprintf('Frame Rate = %3.3f /sec\n',frameRate)];
+            %read comment
+            metastr = [metastr sprintf('Comments:\n')];
+            fseek(fid,256,'bof');
+            metastr = [metastr char((fread(fid,159,'char',1))')]; %Added text can be as long as 257 bytes (this code is from read_NP.m)
+            fclose(fid);
+            set(metadata_box,'String',metastr,'ListboxTop',1);
+        else % neuroplex .tsm
+            sizeA = 2880; % # of integers of header info
+            fid = fopen(imfile);
+            header = fread(fid, sizeA,'uint8=>char');
+            fclose(fid);
+            %convert header to iminfo
+            for i = 1:36
+                %headers consist of 36x80byte "cards" w/keyword, value, (optional comment)
+                %last keyword is "END", the rest of header is empty
+                ctmp = textscan(header(i*80-79:i*80),'%s %s','Delimiter','=');
+                if ~isempty(ctmp{1}) && ~isequal(strip(ctmp{1}{1}),'END')
+                    tsminfo.(strip(ctmp{1}{1})) = strip(ctmp{2}{1});
+                end
+            end
+            tsminfo.frames = str2double(tsminfo.NAXIS3);
+            xpix = str2double(tsminfo.NAXIS1);
+            ypix = str2double(tsminfo.NAXIS2);
+            tsminfo.size = [ypix,xpix];
+            
+            deltaT = str2double(tsminfo.EXPOSURE);
+            tsminfo.frameRate = 1/deltaT;
+            metastr = evalc('tsminfo');
+            set(metadata_box,'String',metastr,'ListboxTop',1);
+        end
     case typestr{5} %'tif' %Standard .tif
         %info = imfinfo(imfile, 'tif');
 %             warndlg('Metadata not available');

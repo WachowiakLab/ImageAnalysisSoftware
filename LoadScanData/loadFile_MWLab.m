@@ -15,12 +15,11 @@ function MWfile = loadFile_MWLab(varargin)
 
 MWfile = struct;
 typestr = getdatatypes; % {'scanimage', 'scanbox', 'prairie', 'neuroplex', 'tif'};
-
 % get datatype 
 if nargin > 0
     datatype = varargin{1};
     if ~max(strcmp(datatype,typestr))
-        errordlg('Datatype must be ''scanimage'', ''scanbox'', ''prairie'', ''neuroplex'', or ''tif''');
+        errordlg({'Datatype must be:',char(typestr)});
         return;
     end
 else
@@ -56,7 +55,7 @@ else
             ext = '.xml'; %might try using uigetfolder for multiple files
             [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'Off');
         case typestr{4} %'neuroplex'
-            ext = '.da';
+            ext = {'*.da;*.tsm','Neuroplex Files'};
             [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'Off');
         case typestr{5} %'tif'
             ext = '.tif';
@@ -66,7 +65,6 @@ else
 end
 MWfile.dir = pathname;
 MWfile.name = filename;
-
 %Load images (need to work on dealing with multichannel data!)
 switch datatype
     case 'scanimage'
@@ -92,13 +90,14 @@ switch datatype
         MWfile.size = tmpinfo.size; MWfile.frames = tmpinfo.frames; MWfile.frameRate = tmpinfo.frameRate;
     case 'neuroplex'
         if nargin > 3
-            [MWfile.im,tmpinfo,MWfile.aux1,MWfile.aux2,MWfile.aux3] = ...
+            [MWfile.im,tmpinfo,MWfile.aux1,MWfile.aux2,MWfile.aux3,MWfile.aux4,MWfile.ephys] = ...  %MW modified 08/14. Ned to see if this works?
                 loadNeuroplex(fullfile(MWfile.dir,MWfile.name),aux2bncmap);
         else
-            [MWfile.im,tmpinfo,MWfile.aux1,MWfile.aux2,MWfile.aux3] = ...
+            [MWfile.im,tmpinfo,MWfile.aux1,MWfile.aux2,MWfile.aux3,MWfile.aux4] = ...
                 loadNeuroplex(fullfile(MWfile.dir,MWfile.name));
         end
         if isempty(MWfile.aux3); MWfile = rmfield(MWfile,'aux3'); end
+        if isempty(MWfile.aux4); MWfile = rmfield(MWfile,'aux4'); end
         MWfile.size = tmpinfo.size; MWfile.frames = tmpinfo.frames; MWfile.frameRate = tmpinfo.frameRate;
     case 'tif'
         wait = waitbar(1/numel(MWfile.name),'Loading File');
