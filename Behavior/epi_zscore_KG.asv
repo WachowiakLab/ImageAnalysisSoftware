@@ -1,0 +1,89 @@
+function epi_zscore
+    cd (uigetdir)
+    load('workspace.mat');
+    clearvars -except TSdata csplus csminus hitnum crnum Valence
+    
+    
+    plus_odoronsets = [];
+    for i =1:length(csplus)
+        odoronind(i,1) = find(TSdata.file(csplus(i)).aux1.signal ==1,1);
+        plus_odoronsets(i,1) = TSdata.file(csplus(i)).aux1.times(odoronind(i));
+    end
+    
+    
+    % Plus
+    plus_baselineon = [];
+    plus_baselineoff = [];
+    plus_baselinemean = [];
+    zscore_plus = [];
+    df_csplus = [];
+    for i =1:length(csplus)
+        %zscore and df
+        plus_baselineon(i,1) = find(TSdata.file(csplus(i)).roi(end).time >1,1);
+        plus_baselineoff(i,1) = find(TSdata.file(csplus(i)).roi(end).time >3,1);
+        
+        plus_baselinemean(i,1) = mean(TSdata.file(csplus(i)).roi(end).series(plus_baselineon(i):plus_baselineoff(i)));
+        plus_baselinestd(i,1) = std(TSdata.file(csplus(i)).roi(end).series(plus_baselineon(i):plus_baselineoff(i)));    
+        %zscore_plus(i,:) = (TSdata.file(i,:) - TSdata.file(i))./plus_baselinestd(i);
+    
+        df_csplus(i,:) =     (TSdata.file(csplus(i)).roi(end).series(1,:) - plus_baselinemean(i))./plus_baselinemean(i);
+        csplus_means(i,1) = mean(df_csplus(plus_baselineon(i):plus_baselineoff(i)));
+        csplus_std(i,:) = std(df_csplus(plus_baselineon(i):plus_baselineoff(i)));
+        zscore_plus(i,:) = (df_csplus(i,:) - csplus_means(i))./csplus_std(i);
+    end
+    
+    zscore_plus(:,1:2) = [];
+    df_csplus(:,1:2) = [];
+    
+    
+    
+    % Minus
+    minus_baselineon = [];
+    minus_baselineoff = [];
+    minus_baselinemean = [];
+    minus_baselinestd = [];
+
+    zscore_minus = [];
+    df_csminus = [];
+
+    for i =1:length(csminus)
+        minus_baselineon(i,1) = find(TSdata.file(csminus(i)).roi(end).time >1,1);
+        minus_baselineoff(i,1) = find(TSdata.file(csminus(i)).roi(end).time >3,1);
+
+        minus_baselinemean(i,1) = mean(TSdata.file(csminus(i)).roi(end).series(minus_baselineon(i):minus_baselineoff(i)));
+        minus_baselinestd(i,1) = std(TSdata.file(csminus(i)).roi(end).series(minus_baselineon(i):minus_baselineoff(i)));      
+        %zscore_minus(i,:) = (TSdata.file(i,:) - TSdata.file(i))./minus_baselinestd(i);
+  
+        df_csminus(i,:) =     (TSdata.file(csminus(i)).roi(end).series(1,:) - minus_baselinemean(i))./minus_baselinemean(i);
+        csminus_means(i,1) = mean(df_csminus(minus_baselineon(i):minus_baselineoff(i)));
+        csminus_std(i,:) = std(df_csminus(minus_baselineon(i):minus_baselineoff(i)));
+        zscore_minus(i,:) = (df_csminus(i,:) - csminus_means(i))./csminus_std(i);
+    end
+    
+    zscore_minus(:,1:2) = [];
+    df_csminus(:,1:2) = [];
+    
+    
+    assignin("base","zscore_minus");
+    assignin("base","zscore_plus");
+    assignin("base","df_csminus");
+    assignin("base","df_csplus");
+
+    zscore_all = horzcat(mean(zscore_plus)',mean(zscore_minus)');
+   
+    save('zscore.mat');
+    
+    writematrix(zscore_plus,'zscore.xlsx',Sheet='plus_all')
+    writematrix(mean(zscore_plus)','zscore.xlsx',Sheet='plus_mean')
+    
+    writematrix(zscore_minus,'zscore.xlsx',Sheet='minus_all')
+    writematrix(mean(zscore_minus)','zscore.xlsx',Sheet='minus_mean')
+    
+    
+    
+    writematrix(df_csplus,'dff.xlsx',Sheet='plus_all');
+    writematrix(mean(df_csplus)','dff.xlsx',Sheet='plus_mean');
+    
+    writematrix(df_csminus,'dff.xlsx',Sheet='minus_all');
+    writematrix(mean(df_csminus)','zscore.xlsx',Sheet='minus_mean');
+end 

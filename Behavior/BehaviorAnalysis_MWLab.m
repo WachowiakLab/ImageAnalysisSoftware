@@ -114,7 +114,7 @@ uicontrol(hBA,'style','pushbutton','Units','Normalized','Position',[.10 .02 .08 
 hpanel = uipanel(hBA,'Units','Normalized','Position',[.195 0.01 .7 .98]);
 hAx = axes(hpanel,'Units','Normalized','Position',[ 0 0.03 1 .97]);
 %ephys list
-ephysstr = {'Aux1(odor)','Aux2(sniff)','ephys-odor','ephys-sniff','ephys-puff','det-sniff','ephys-lick','ephys-reward','ephys-valence'};
+ephysstr = {'Aux1(odor)','Aux2(sniff)','ephys-odor','ephys-sniff','ephys-lick','ephys-valence','ephys-velocity','det-sniff'}; %MW added lick 2/5/23
 uicontrol(hBA,'style','text','Units','Normalized','Position',[.9 .97 .1 .02], ...
     'FontSize',9,'String','EPhys Signals to Display:','BackgroundColor',BGCol);
 uicontrol(hBA,'tag','ephys','style','listbox','Units','Normalized','Position',...
@@ -273,30 +273,25 @@ function CB_UpdatePlot(~,~)
                     range(behaviordata.trials(T).ephys.sniff) ).*0.2 +0.8;
 %                 sig = sig/50+0.9; %shows zscore +/- 5 in y=0.8to1.0 window
                 plot(hAx,tim,sig); 
-            case ephysstr{5} %ephys-puff
-                tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
-                sig = ( ( behaviordata.trials(T).ephys.puff - min(behaviordata.trials(T).ephys.puff(:)) )./ ...
-                    max(range(behaviordata.trials(T).ephys.puff),5) ).*0.2 +0.8;
-                plot(hAx,tim,sig);
-            case ephysstr{6} %'det-sniff'
-                tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
-                sig = ( ( behaviordata.trials(T).det_sniffs.sniffs - min(behaviordata.trials(T).det_sniffs.sniffs(:)) )./ ...
-                    max(range(behaviordata.trials(T).det_sniffs.sniffs),5) ).*0.2 +0.8;
-                plot(hAx,tim,sig);
-            case ephysstr{7} %'ephys-lick'
+            case ephysstr{5} %ephys-lick
                 tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
                 sig = ( ( behaviordata.trials(T).ephys.lick - min(behaviordata.trials(T).ephys.lick(:)) )./ ...
                     max(range(behaviordata.trials(T).ephys.lick),5) ).*0.2 +0.8;
                 plot(hAx,tim,sig);
-            case ephysstr{8} %'ephys-reward'
-                tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
-                sig = ( ( behaviordata.trials(T).ephys.reward - min(behaviordata.trials(T).ephys.reward(:)) )./ ...
-                    max(range(behaviordata.trials(T).ephys.reward),5) ).*0.2 +0.8;
-                plot(hAx,tim,sig);
-            case ephysstr{9} %'ephys-valence'
+            case ephysstr{6} %ephys-valence
                 tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
                 sig = ( ( behaviordata.trials(T).ephys.valence - min(behaviordata.trials(T).ephys.valence(:)) )./ ...
                     max(range(behaviordata.trials(T).ephys.valence),5) ).*0.2 +0.8;
+                plot(hAx,tim,sig);
+            case ephysstr{7} %ephys-velocity
+                tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
+                sig = ( ( behaviordata.trials(T).ephys.velocity - min(behaviordata.trials(T).ephys.velocity(:)) )./ ...
+                    max(range(behaviordata.trials(T).ephys.velocity),5) ).*0.2 +0.8;
+                plot(hAx,tim,sig);
+            case ephysstr{8} %'det-sniff'
+                tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
+                sig = ( ( behaviordata.trials(T).det_sniffs.sniffs - min(behaviordata.trials(T).det_sniffs.sniffs(:)) )./ ...
+                    max(range(behaviordata.trials(T).det_sniffs.sniffs),5) ).*0.2 +0.8;
                 plot(hAx,tim,sig);
         end
     end
@@ -535,18 +530,21 @@ function CB_ExtractSniffs(~,~)
     sniffstop = str2double(get(findobj(hBA,'tag','sniffstop'),'String'));
     if isnan(sniffstart) || isnan(sniffstop); disp('enter sniff-trig start/end values'); return; end
     %extract signals export to command window
-    for r = 1:length(rois)
-        %get responses from command window - append to these if they exist
-        tmpstr = sprintf('snifftrig_roi%d',r);
+    %*****************this part MW modified to make 3D array of STA outputs
+     %get responses from command window - append to these if they exist
+        tmpstr = sprintf('snifftrig_rois');
+        tmpstastr=sprintf('stas');
         try
             snifftrig_roi = evalin('base', tmpstr);
         catch
             snifftrig_roi = [];
         end
-        %how many frames - make sure it's the same for all traces
-        if ~isempty(snifftrig_roi); [cnt,frames] = size(snifftrig_roi); 
-        else; cnt=0; frames = floor((sniffstop-sniffstart)*behaviordata.trials(T).frameRate);
+         %how many frames - make sure it's the same for all traces
+        if ~isempty(snifftrig_roi); [numsniffs,frames,roinum] = size(snifftrig_roi); 
+        else; numsniffs=0; frames = floor((sniffstop-sniffstart)*behaviordata.trials(T).frameRate);roinum=length(rois);
         end
+    for r = 1:length(rois)      
+        cnt=numsniffs;
         %prepare the trace - bgsubtract,filters,df,etc
         roitimes = behaviordata.trials(T).roi(rois(r)).time - behaviordata.trials(T).roi(rois(r)).time(1);
         %bgsubtract
@@ -574,11 +572,15 @@ function CB_ExtractSniffs(~,~)
         end
         %df
         if get(findobj(hBA,'tag','dF'),'Value') %deltaF
+             tstart = str2double(get(findobj(hBA,'Tag','fstart'),'String'));  %added by MW 1/31/23 to fix bug?
+             tstop = str2double(get(findobj(hBA,'Tag','fstop'),'String'));  %added by MW 1/31/23 to fix bug?
             istart = find(roitimes>tstart,1,'first');
             istop = find(roitimes<tstop,1,'last');
             FO = mean(roisig(istart:istop));
             roisig = roisig-FO;
         elseif get(findobj(hBA,'tag','dFF'),'Value') %deltaF/F
+             tstart = str2double(get(findobj(hBA,'Tag','fstart'),'String'));  %added by MW 1/31/23 to fix bug?
+             tstop = str2double(get(findobj(hBA,'Tag','fstop'),'String'));  %added by MW 1/31/23 to fix bug?
             istart = find(roitimes>tstart,1,'first');
             istop = find(roitimes<tstop,1,'last');
             FO = mean(roisig(istart:istop));
@@ -587,10 +589,20 @@ function CB_ExtractSniffs(~,~)
         %extract each sniff traces
         for t = 1:length(trig)
             istart = find(roitimes>=trig(t)+sniffstart,1,'first');
-            snifftrig_roi(cnt+1,:) = roisig(istart:istart+frames-1);
+            snifftrig_roi(cnt+1,:,r) = roisig(istart:istart+frames-1);  %MW modified for 3D array update
             cnt = cnt+1;
         end
-        assignin('base',tmpstr,snifftrig_roi);
-    end    
+             
+    end
+   
+     %here, make STAs and save as separate variable
+    assignin('base',tmpstr,snifftrig_roi);   %MW moved
+   [numsniffs,frames,roinum] = size(snifftrig_roi);
+stas=[];
+for k=1:roinum
+   stas(:,k)=mean(snifftrig_roi(:,:,k));
 end
+assignin('base',tmpstastr,stas);
+end
+
 end

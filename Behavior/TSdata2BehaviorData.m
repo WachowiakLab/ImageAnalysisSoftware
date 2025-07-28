@@ -71,6 +71,7 @@ for f = 1:numel(allOdorTrials)
                 end
                 behaviordata.trials(cnt).ephys.reward = tsdata.file(f).ephys.reward(eind1:eind2);
                 behaviordata.trials(cnt).ephys.valence = tsdata.file(f).ephys.valence(eind1:eind2);
+                behaviordata.trials(cnt).ephys.velocity = tsdata.file(f).ephys.velocity(eind1:eind2);
             end
             for r = 1:length(tsdata.file(f).roi)
                 tmpTS=newTS{f,r};

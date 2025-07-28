@@ -1,0 +1,10 @@
+function varargout = subsref(m,s)
+    if length(s) == 1 && strcmp(s.type,'.')
+        varargout = {m.public.(s.subs)};
+    elseif length(s) == 2 && all(strcmp({s.type},{'.','()'}))
+        varargout = cell(1,max(nargout,nargout(m.public.(s(1).subs))));
+        [varargout{:}] = m.public.(s(1).subs)(s(2).subs{:});
+    else
+        error('Wrong calling syntax')
+    end
+end

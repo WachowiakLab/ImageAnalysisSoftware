@@ -1,0 +1,4 @@
+function display(m)
+    disp(['Public Functions in <' m.name '>:'])
+    display(m.public)
+end

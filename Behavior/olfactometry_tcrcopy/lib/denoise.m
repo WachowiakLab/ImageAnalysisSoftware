@@ -1,0 +1,3 @@
+function g = denoise(s)
+    g = wden(s,'sqtwolog','s','sln',3,'db4');
+end

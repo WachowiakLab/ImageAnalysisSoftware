@@ -1,0 +1,92 @@
+function o = read_ofd(filepath)
+    if nargin == 0
+        [filename, pathstr] = uigetfile(['',{'*.ofd','Olfactometry raw data files (*.ofd)'}],'Choose *.ofd file');
+        if isequal(filename,0)
+            o = [];
+            return
+        end
+    else
+        [pathstr, name, ext, versn] = fileparts(filepath);
+        filename = [name,ext,versn];
+    end
+    try
+        fid = fopen(fullfile(pathstr, filename),'r','b');
+        fseek(fid,0,'bof');
+    catch
+        warning('ImportOfd:missingFile','The file was not found.')
+        o = [];
+        return
+    end
+
+    o = struct;
+    o.filename = filename;
+
+    try
+        while 1
+            next = fread(fid,1,'uint32');
+            siz = fread(fid,1,'uint32');
+            if isempty(siz)
+                break
+            end
+            name = fread(fid,siz,'*char')';
+            %labview variant:
+            dataloc = ftell(fid) + fread(fid,1,'uint16');
+            fread(fid,1,'uint8');
+            typeint = fread(fid,1,'uint8');
+            typestr = type_lookup(typeint);
+            if ~isempty(typestr)
+                fseek(fid,dataloc,'bof');
+                o.(name) = fread(fid,1,typestr);
+            else
+                switch typeint
+                    case 48
+                        fseek(fid,dataloc,'bof');
+                        siz = fread(fid,1,'uint32');
+                        o.(name) = fread(fid,siz,'*char')';
+                    case 64
+                        ndim = fread(fid,1,'uint16');
+                        fread(fid,ndim,'uint32');
+                        fread(fid,1,'uint16');
+                        fread(fid,1,'uint8');
+                        typeint = fread(fid,1,'uint8');
+                        typestr = type_lookup(typeint);
+                        if ~isempty(typestr)
+                            fseek(fid,dataloc,'bof');
+                            siz = fread(fid,ndim,'uint32');
+                            o.(name) = fread(fid,prod(siz),typestr)';
+                            if ndim > 1
+                                o.(name) = permute(reshape(o.(name),fliplr(siz')),ndim:-1:1);
+                            end
+                        end
+                end
+            end
+            fseek(fid,next,'bof');
+        end
+    catch
+    end
+    fclose(fid);
+end
+
+
+function str = type_lookup(int)
+    switch int
+        case 1
+            str = 'int8';
+        case 2
+            str = 'int16';
+        case 3
+            str = 'int32';
+        case 5
+            str = 'uint8';
+        case 6
+            str = 'uint16';
+        case 7
+            str = 'uint32';
+        case 9
+            str = 'float32';
+        case 10
+            str = 'float64';
+        otherwise
+            str = '';
+    end
+end

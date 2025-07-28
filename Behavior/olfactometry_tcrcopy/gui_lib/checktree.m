@@ -1,0 +1,140 @@
+function t = checktree(f) 
+
+    tree_root = javax.swing.tree.DefaultMutableTreeNode('Root');
+    callbacks = struct;
+
+    jarpath = [fileparts(mfilename('fullpath')) '\olfactometry.jar'];
+    if ~ismember(jarpath,javaclasspath('-dynamic'))
+        javaaddpath(jarpath)
+    end
+
+    model = javax.swing.tree.DefaultTreeModel(tree_root);
+    checkTree = CheckNodeTree(model);
+
+    scroller = javax.swing.JScrollPane(checkTree,javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+    [hcomp, t.box] = javacomponent(scroller,[],f);
+    t.scroller_obj = handle(scroller);
+    t.scroller_obj.getLayout.getViewport.setBackground(java.awt.Color(1,1,1))
+
+    checkTree.setRootVisible(0)
+    checkTree.setRowHeight(20)
+
+    t.clearTree = @clearTree;
+    function clearTree
+        tree_root.removeAllChildren
+    end
+
+    t.addGroup = makeAddGroup(tree_root);
+    function h = makeAddGroup(c)
+        h = @(name, callback) addGroupTo(c, name, callback);
+
+        function c = addGroupTo(parent, name, callback)
+            if isa(callback,'function_handle')
+                cid = genvarname(name,fieldnames(callbacks));
+                callbacks.(cid) = callback;
+            else
+                cid = '';
+            end
+            nc = GroupNode(name,cid,true);
+            parent.add(nc)
+            c = struct('addGroup',makeAddGroup(nc),'addCheck',makeAddCheck(nc),'expandGroup',makeExpandGroup(nc));
+
+            function h = makeAddCheck(c)
+                h = @(name, checked, callback) addCheckTo(c, name, checked, callback);
+
+                function ctrl_fcns = addCheckTo(parent, name, checked, callback)
+                    if isa(callback,'function_handle')
+                        cid = genvarname(name,fieldnames(callbacks));
+                        callbacks.(cid) = callback;
+                    else
+                        cid = '';
+                    end
+                    nc = CheckNode(name,cid,false,checked);
+                    parent.add(nc)
+                    ctrl_fcns = makeCtrlFcns(nc);
+
+                    function fcns = makeCtrlFcns(checkNode)
+                        fcns = struct('getCheckState',@() getCheckState(checkNode),'setCheckState', @(varargin) setCheckState(checkNode, varargin{:}));
+
+                        function isChecked = getCheckState(checkNode)
+                            isChecked = checkNode.isChecked;
+                        end
+
+                        function setCheckState(checkNode, state, skipEvent)
+                            prevState = checkNode.isChecked;
+                            if prevState ~= state
+                                checkNode.setChecked(state)
+                                if nargin < 3 || skipEvent == false
+                                    cid = checkNode.getUserObject;
+                                    if ~isempty(cid)
+                                        k = callbacks.(cid);
+                                        k(struct('type','checkChange','state',checkNode.isChecked))
+                                    end
+                                end
+                                repaint
+                            end
+                        end
+                    end
+
+                end
+            end
+
+            function h = makeExpandGroup(groupNode)
+                h = @() expandGroup(groupNode);
+
+                function expandGroup(groupNode)
+                    checkTree.expandPath(javax.swing.tree.TreePath(groupNode.getPath))
+                end
+            end
+        end
+    end
+
+
+    set(checkTree,'MouseClickedCallback',@mouse_click)
+    function mouse_click(src, ev)
+        x = ev.getX;
+        y = ev.getY;
+        p = checkTree.getPathForLocation(x, y);
+        if ~isempty(p)
+            c = p.getLastPathComponent;
+            cid = c.getUserObject;
+            if ~isempty(cid)
+                k = callbacks.(cid);
+                event = struct('type','','position',[x y]);
+                if ev.getButton == 3
+                    event.type = 'rightClick';
+                elseif ev.getButton == 1
+                    switch ev.getClickCount
+                        case 1
+                            event.type = 'leftClick';
+                        case 2
+                            event.type = 'doubleClick';
+                    end
+                end
+                k(event)
+            end
+        end
+    end
+
+    set(model,'TreeNodesChangedCallback',@nodes_changed)
+    function nodes_changed(src, ev)
+        p = javax.swing.tree.TreePath(ev.getPath);
+        c = p.getLastPathComponent.getChildAt(ev.getChildIndices);
+        cid = c.getUserObject;
+        if ~isempty(cid)
+            k = callbacks.(cid);
+            k(struct('type','checkChange','state',c.isChecked))
+        end
+    end
+
+    t.repaint = @repaint;
+    function repaint
+        checkTree.updateUI
+    end
+
+    set(t.box,'DeleteFcn',@deleteMe)
+    function deleteMe(varargin)
+        t = [];
+    end
+end
+
