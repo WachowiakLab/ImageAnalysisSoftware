@@ -94,7 +94,6 @@ hMAP = figure('NumberTitle','off','Name', guiname, 'Units', 'Normalized', ...
 hmenu = uimenu(hMAP,'Text','GUI Settings');
 uimenu(hmenu,'Text','Save Settings','Callback',@CBSaveSettings);
 uimenu(hmenu,'Text','Load Settings','Callback',@CBLoadSettings);
-roivsmapplot = [];  %added by MW. Used to do sorting-by-ROI and de-sorting
         
 % general commands and info
 uicontrol(hMAP,'Style', 'pushbutton',  'Units', 'normalized', 'Position', ...
@@ -541,10 +540,10 @@ function tabsetup(tab)
         'String', 'Montage', 'Fontweight', 'Bold', 'Value', 0, 'Tag','montage','Callback',@CB_montage);
     %Correlation Image
     uicontrol(tab,'Style', 'pushbutton', 'Units', 'normalized', 'Position', [0.47 0.05 0.24 0.04],...
-    'String', 'Sort by ROI', 'Fontweight', 'Bold', 'Value', 0, 'Callback',@CB_CorrImage);
+    'String', 'XCorr Image', 'Fontweight', 'Bold', 'Value', 0, 'Callback',@CB_CorrImage);
     %Max/Min Projection Image
     uicontrol(tab,'Style', 'pushbutton', 'Units', 'normalized', 'Position', [0.47 0.01 0.24 0.04],...
-    'String', 'Un-Sort afer sorting', 'Fontweight', 'Bold', 'Value', 0, 'Callback',@CB_ProjectImage);
+    'String', 'Max/Min Projection', 'Fontweight', 'Bold', 'Value', 0, 'Callback',@CB_ProjectImage);
     %ROIs
     %RoiVsMap# Plot/Image
     uicontrol(tab,'Style', 'pushbutton', 'Units', 'normalized', 'Position', [0.72 0.13 0.24 0.04],...
@@ -770,7 +769,7 @@ function CBaddFiles(~,~) %add image file(s) to list
             ext = '.xml'; %might try using uigetfolder for multiple files
             [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'Off');
         case 'neuroplex'
-            ext = '.da';
+            ext = {'*.da;*.tsm','Neuroplex Files'};
             [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'On');
             MapsData.aux2bncmap = assignNeuroplexBNC;
         case 'tif' %Standard .tif
@@ -1045,7 +1044,6 @@ function CBsortAndSelect(~,~)
                 end
             end
         end
-        %here is where could resort order?
         set(findobj(tab,'Tag','OdorTrial_listbox'),'String',odortrialstr);
         if max(get(findobj(tab,'Tag','OdorTrial_listbox'),'Value')>length(odortrialstr)); set(findobj(tab,'Tag','OdorTrial_listbox'),'Value',1); end
     else
@@ -1721,7 +1719,7 @@ function CBmakeFig(~,~)
             else
                 [ctemp,~] = contour(tmpax,MapsData.roi(rois(r)).mask, 1, 'LineColor',myColors(r));
             end
-            %text(tmpax,mean(ctemp(1,:)),mean(ctemp(2,:)),num2str(rois(r)),'Color',myColors(r),'FontSize',14);
+            text(tmpax,mean(ctemp(1,:)),mean(ctemp(2,:)),num2str(rois(r)),'Color',myColors(r),'FontSize',14);
         end
         hold(tmpax,'off');
     end
@@ -1871,13 +1869,12 @@ function doImageProcessing()
             tmp(tmp > tmp_max) = tmp_max;
             tmpim(:,:,t) = tmp;
         end
-%         if get(findobj(tab,'Tag','lowthresh'),'Value')
-%             tmp = tmpim(:,:,t);
-%             tmp_min = thresh*(max(tmp(:))-min(tmp(:))) + min(tmp(:));
-%             tmp(tmp<tmp_min) = tmp_min;  %Sets values below threshold to be equal to min value
-%             tmpim(:,:,t) = tmp;
-%         end
-        %modifed- MW change order of operation here - do min and max cutoff first, before lowthresh 
+        if get(findobj(tab,'Tag','lowthresh'),'Value')
+            tmp = tmpim(:,:,t);
+            tmp_min = thresh*(max(tmp(:))-min(tmp(:))) + min(tmp(:));
+            tmp(tmp<tmp_min) = tmp_min;  %Sets values below threshold to be equal to min value
+            tmpim(:,:,t) = tmp;
+        end
         if get(findobj(tab,'Tag','mincutoff'),'Value')
             tmp = tmpim(:,:,t);
             tmp(tmp<mincut) = mincut;
@@ -1888,14 +1885,6 @@ function doImageProcessing()
             tmp(tmp>maxcut) = maxcut;
             tmpim(:,:,t) = tmp;
         end
-        % here is where do lowthresh
-        if get(findobj(tab,'Tag','lowthresh'),'Value')
-            tmp = tmpim(:,:,t);
-            tmp_min = thresh*(max(tmp(:))-min(tmp(:))) + min(tmp(:));
-            tmp(tmp<tmp_min) = tmp_min;  %Sets values below threshold to be equal to min value
-            tmpim(:,:,t) = tmp;
-        end
-        
         if get(findobj(tab,'Tag','bilinear'),'Value') %This changes the image size! Bilinear interpolation DO LAST!!!
             bitmpim(:,:,t) = interp2(tmpim(:,:,t)); %also resize rois!
         end
@@ -1951,106 +1940,31 @@ function CBsaveImage(~,~)
     tab = hTabgroup.SelectedTab; tabnum = str2double(tab.Tag);
     tmpfig = findobj('type','figure','Name',sprintf('Figure #%s',tab.Tag)); figure(tmpfig);
     mapax = findobj(tmpfig,'Tag','mapax');
-    tmpMin = str2num(get(findobj(tab,'Tag','Cmin'), 'String'));
-    tmpMax = str2num(get(findobj(tab,'Tag','Cmax'), 'String'));
-    
+    tmpoutname = [MapsData.file(1).dir 'myMaps.tif'];
+    [outname,path] = uiputfile('*.tif','Select file name', tmpoutname);
+    if ~outname; return; end
+    tiffout = Tiff(fullfile(path,outname), 'w');%r+?
+    %set Tags
     [height, width, depth] = size(figdata{tabnum}.im);
-    savemode = questdlg('Save as single TIFF stack or archive in folders?','Save choice','Stack','Archive','Stack');
-    if strcmp(savemode,'Stack')
-       tmpoutname = [MapsData.file(1).dir 'myMaps.tif'];    
-        [outname,path] = uiputfile('*.tif','Select file name', tmpoutname);
-        if ~outname; return; end 
-        bscale = questdlg('Would you like to scale from Cmin to Cmax?','Customize Map Limits','Yes','No','No');
-        tiffout = Tiff(fullfile(path,outname), 'w');%r+?
-        %set Tags
-        [height, width, depth] = size(figdata{tabnum}.im);
-        tagstruct.Photometric = Tiff.Photometric.MinIsBlack;
-        tagstruct.ImageLength = height;
-        tagstruct.ImageWidth = width;
-        tagstruct.SamplesPerPixel = 1;
-         tagstruct.RowsPerStrip = height;
-        tagstruct.PlanarConfiguration = Tiff.PlanarConfiguration.Chunky;
-        tagstruct.Compression = Tiff.Compression.None;
-        tagstruct.SampleFormat = Tiff.SampleFormat.UInt;
-        tagstruct.BitsPerSample = 16;
-    if strcmp(bscale,'Yes')
-        for d = 1:depth 
-            tagstruct.ImageDescription = [figdata{tabnum}.ImageDescription ...
-                sprintf('\nTitle: %s;',figdata{tabnum}.title{d}) ...
-                sprintf('\nDetails: %s;',figdata{tabnum}.details{d})];
-            tiffout.setTag(tagstruct);
-            tmpim = figdata{tabnum}.im(:,:,d);
-            tmp1 = min(min(tmpim));
-            if tmpMin < 0
-            tmpim = tmpim - tmp1;
-            tmp3 = max(max(tmpim));
-            tmpim = ((tmpim / tmp3)*(tmpMax-tmpMin)*(65536/(tmpMax-tmpMin)))+tmpMin/65536;
-            else
-                tmpim = tmpim - tmp1;
-                tmp3 = max(max(tmpim));
-                tmpim = ((tmpim / tmp3)*(tmpMax-tmpMin)*(65536/(tmpMax-tmpMin)))+tmpMin/65536;
-            end
-            tiffout.write(uint16(tmpim));
-            if d ~= depth; tiffout.writeDirectory(); end
-        end
-    else
-         for d = 1:depth
-            tagstruct.ImageDescription = [figdata{tabnum}.ImageDescription ...
-                sprintf('\nTitle: %s;',figdata{tabnum}.title{d}) ...
-                sprintf('\nDetails: %s;',figdata{tabnum}.details{d})];
-            tiffout.setTag(tagstruct);
-            tiffout.write(uint16(figdata{tabnum}.im(:,:,d)));
-            if d ~= depth; tiffout.writeDirectory(); end
-         end    
+    tagstruct.Photometric = Tiff.Photometric.MinIsBlack;
+    tagstruct.ImageLength = height;
+    tagstruct.ImageWidth = width;
+    tagstruct.SamplesPerPixel = 1;
+    tagstruct.RowsPerStrip = height;
+    tagstruct.PlanarConfiguration = Tiff.PlanarConfiguration.Chunky;
+    tagstruct.Compression = Tiff.Compression.None;
+    tagstruct.SampleFormat = Tiff.SampleFormat.IEEEFP;
+    tagstruct.BitsPerSample = 32;
+    for d = 1:depth
+        tagstruct.ImageDescription = [figdata{tabnum}.ImageDescription ...
+            sprintf('\nTitle: %s;',figdata{tabnum}.title{d}) ...
+            sprintf('\nDetails: %s;',figdata{tabnum}.details{d})];
+        tiffout.setTag(tagstruct);
+        tiffout.write(figdata{tabnum}.im(:, :, d));
+        if d ~= depth; tiffout.writeDirectory(); end
     end
     tiffout.close();
-   
-    disp('All maps saved as TIFF stack');  
-    else
-        parentpath=uigetdir(MapsData.file(1).dir, 'Select parent folder for maps');
-        rotateyn=questdlg('Rotate maps?','Rotate?','Yes','No','No');
-        figure;
-        for d = 1:depth
-            %disp(d)
-            titleparts=split(string(figdata{tabnum}.title{d}),"/");
-            pathnames=split(titleparts(2));
-            if numel(pathnames) > 1; odordir=strcat(parentpath, "\", pathnames(1)," ",pathnames(2));
-            else strcat(parentpath, "\", pathnames(1)); end           
-            disp(odordir)
-            status=mkdir(odordir);
-            titleparts=split(titleparts(1),".");
-            outname=strcat(titleparts(1),'.tif');
-            tmpim = figdata{tabnum}.im(:,:,d);
-            if strcmp(rotateyn,'Yes');tmpim=rot90(tmpim);end
-                %figure;
-                imagesc(tmpim);
-                hold on;
-                tmpax=gca;set(tmpax,'Tag','mapax','DataAspectRatio', [1 1 1],'DataAspectRatioMode','manual',...
-                'YTick',[],'YColor',[1 1 1],'XTick',[],'XColor',[1 1 1],'Color',defaultaxescolor);
-            %colormap
-             if get(findobj(tab,'Tag','clim1'), 'Value') %min-max
-                 tmp1 = min(tmpim(:)); tmp2 = max(tmpim(:));
-                    caxis(tmpax,[tmp1 tmp2]);
-                 set(findobj(tab,'Tag','Cmin'),'String',sprintf('%0.2f',tmp1)); set(findobj(tab,'Tag','Cmax'),'String',sprintf('%0.2f',tmp2));
-            elseif get(findobj(tab,'Tag','clim2'), 'Value') %0.2-99.8 prctile
-                tmp = prctile(tmpim(:),[.2 99.8]);
-                caxis(tmpax,[tmp(1) tmp(2)]);
-                set(findobj(tab,'Tag','Cmin'),'String',sprintf('%0.2f',tmp(1))); set(findobj(tab,'Tag','Cmax'),'String',sprintf('%0.2f',tmp(2)));
-             elseif get(findobj(tab,'Tag','clim3'), 'Value') %manual
-                tmp1 = str2num(get(findobj(tab,'Tag','Cmin'), 'String'));
-                tmp2 = str2num(get(findobj(tab,'Tag','Cmax'), 'String'));
-                caxis(tmpax,[tmp1 tmp2]);
-             end
-            val = get(findobj(tab,'Tag','cmap_popupmenu'), 'Value');
-            colormap(tmpax,[cmapstrings{val} '(256)']);
-             F=getframe;
-            imwrite(F.cdata, fullfile(odordir,outname));
-            %close;
-             if d ~= depth;  end
-        end
-        close;
-     disp('All maps archived as individual TIFFs in pre-set folders');
-    end
+    disp('Image Stack Saved as Tif (single precision 32-bit)');  
 end
 
 % % function CBsaveMattStack(~,~)
@@ -2092,8 +2006,6 @@ function CB_montage(~,~)
         montfig = figure('NumberTitle','off','Name',sprintf('Figure #%s Montage',tab.Tag),...
             'Position',[0 (pos(2)+pos(4))-nRows*1.2*width/nCols width nRows*1.2*(width/nCols)]);
     end
-    rotateyn=questdlg('Rotate maps?','Rotate?','Yes','No','No');
-    gridyn=questdlg('Add gridlines?','Grid?','Yes','No','No');
     for m = 1:frames
         if strcmp(bresize,'Yes')
             row = floor((m-1)/nCols)+1; col = m-nCols*(row-1);
@@ -2103,19 +2015,11 @@ function CB_montage(~,~)
             tmpax = axes(montfig,'tag','montax','Position',[(col-1)/nCols 1-row/nRows 1/nCols 1/nRows]);
         end
         tmpim = figdata{tabnum}.im(:,:,m);
-        titlestr = figdata{tabnum}.title(m);        
-        if strcmp(rotateyn,'Yes');tmpim=rot90(tmpim);end       
-       if strcmp(gridyn,'Yes');
-           gridlines=[32 64 96 128 160 192 224];
-            %this adds grid lines - added by MW. meant for NP....
-        imagesc(tmpax,tmpim,'AlphaData',~isnan(tmpim)); set(tmpax,'Tag','mapax','DataAspectRatio', [1 1 1],'DataAspectRatioMode','manual',...
-            'YTick',gridlines,'YColor',[1 1 1],'XTick',gridlines, 'XTickLabel', {}, 'YTickLabel', {}, 'XGrid','on', 'YGrid', 'on', 'GridAlpha', 0.5, 'XColor',[1 1 1],'Color',defaultaxescolor);
-       else
+        titlestr = figdata{tabnum}.title(m);
         imagesc(tmpax,tmpim,'AlphaData',~isnan(tmpim)); set(tmpax,'Tag','mapax','DataAspectRatio', [1 1 1],'DataAspectRatioMode','manual',...
             'YTick',[],'YColor',[1 1 1],'XTick',[],'XColor',[1 1 1],'Color',defaultaxescolor);
-       end
         t = title(tmpax,titlestr,'interpreter','none');
-        t.FontSize = 8;
+        t.FontSize = 6;
         %colormap
         if get(findobj(tab,'Tag','clim1'), 'Value') %min-max
             tmp1 = min(tmpim(:)); tmp2 = max(tmpim(:));
@@ -2293,85 +2197,37 @@ end
 % % end
 
 function CB_CorrImage(~,~)
-% below is code taken from ROI vs. map# plot. try to alter to do re-sorting
- if ~isfield(MapsData,'roi') || isempty(MapsData.roi); disp('ROIs not found.'); return; end
+    tab = hTabgroup.SelectedTab; tabnum = str2double(tab.Tag);
+    frames = size(figdata{tabnum}.im,3); if frames<2; disp('Requires >1 image'); return; end
+    %Could add questionbox to ask if correlate whole map or draw/select a region
+    tmpfig = findobj('type','figure','Name',sprintf('Figure #%s',tab.Tag));
+    oldfig = findobj('type','figure','Name',sprintf('Figure #%s Correlations Image',tab.Tag));
+    if ~isempty(oldfig); delete(oldfig); end
+    figure('NumberTitle','off','Name',sprintf('Figure #%s Correlations Image',tab.Tag), 'Units','normalized', ...
+        'Position',[tmpfig.Position(1)+tmpfig.Position(3) tmpfig.Position(2) tmpfig.Position(3) tmpfig.Position(4)]);  
+    for t = 1:frames
+        tmp1 = figdata{tabnum}.im(:,:,t);
+        for tt = 1:size(figdata{tabnum}.im,3)
+            tmp2 = figdata{tabnum}.im(:,:,tt);
+            corrMap(t,tt) = corr(tmp1(:),tmp2(:));
+        end
+    end
+    imagesc(corrMap); ylabel('Image#'); xlabel('Image#');
+    title('Correlations Image');
+%     assignin('base','xcorrdata',corrMap);
+end
+function CB_ProjectImage(~,~)
     tab = hTabgroup.SelectedTab; tabnum = str2double(tab.Tag);
     tmpfig = findobj('type','figure','Name',sprintf('Figure #%s',tab.Tag));
-    rois = get(findobj(tab,'Tag','ROIs_listbox'),'Value');
-    roiref=rois(1); %in case more then one ROi selected, just take first one.
-%     oldfig = findobj('type','figure','Name',sprintf('Figure #%s ROI Values',tab.Tag));
-%     if ~isempty(oldfig); delete(oldfig); end
-%     figure('NumberTitle','off','Name',sprintf('Figure #%s ROI Values',tab.Tag),'Units','normalized', ...
-%         'Position',[tmpfig.Position(1)+tmpfig.Position(3) tmpfig.Position(2) tmpfig.Position(3) tmpfig.Position(4)]);    
-    %frames = size(figdata{tabnum}.im,3);
-    frames = length(MapsData.file);
-    roivsmapplot = [];
-   % for r = 1:length(rois)
-        %roivsmapplot.XData = 1:frames;
-        roivsmapplot.YData = zeros(1,frames);
-        %roivsmapdata(r).YDataLabel = sprintf('ROI #%d',rois(r));        
-        for t = 1:frames
-            tmp = figdata{tabnum}.im(:,:,t);
-            if get(findobj(tab,'Tag','bilinear'),'Value')
-                tmpdata = mean(tmp(interp2(MapsData.roi(roiref).mask)>0));
-            else
-                tmpdata = mean(tmp(MapsData.roi(roiref).mask>0));
-            end
-            roivsmapplot.YData(t) = mean(tmpdata(:));
-            %roivsmapdata(r).XDataLabels{t} = figdata{tabnum}.title{t};
-        end
-        %plot(roivsmapdata(r).YData,'Marker','o','Color',myColors(r),'LineWidth',2,'DisplayName',sprintf('ROI #%d',rois(r)));
-        %hold on;
-    %end
-%     roiax = gca;
-%     roiax.XLim = [0.5 frames+.5]; roiax.XTick = 1:frames;
-%     ylabel(roiax,'ROI Values'); xlabel(roiax,'Map #');
-%     title('ROI Values Plotted Versus Map #');
-%     roiax.XAxis.TickLabels = roivsmapdata(1).XDataLabels; roiax.XAxis.TickLabelRotation = -40;
-%     roiax.XAxis.TickLabelInterpreter = 'none';
-    respvector=roivsmapplot.YData;
-    [roivsmapplot.YData, roivsmapplot.indices]=sort(respvector, 'descend');
-    roivsmapplot.roi=roiref;
-    assignin('base','roivsmapsorted',roivsmapplot); 
-    MapsData.file(:)=MapsData.file(roivsmapplot.indices);
-end
-    
-  % this is original code cor XCorr function - trying to co-opt to do re-sorting based on resp in chosen ROI.
-  
-    tab = hTabgroup.SelectedTab; tabnum = str2double(tab.Tag);
-%     frames = size(figdata{tabnum}.im,3); if frames<2; disp('Requires >1 image'); return; end
-%     %Could add questionbox to ask if correlate whole map or draw/select a region
-%     tmpfig = findobj('type','figure','Name',sprintf('Figure #%s',tab.Tag));
-%     oldfig = findobj('type','figure','Name',sprintf('Figure #%s Correlations Image',tab.Tag));
-%     if ~isempty(oldfig); delete(oldfig); end
-%     figure('NumberTitle','off','Name',sprintf('Figure #%s Correlations Image',tab.Tag), 'Units','normalized', ...
-%         'Position',[tmpfig.Position(1)+tmpfig.Position(3) tmpfig.Position(2) tmpfig.Position(3) tmpfig.Position(4)]);  
-%     for t = 1:frames
-%         tmp1 = figdata{tabnum}.im(:,:,t);
-%         for tt = 1:size(figdata{tabnum}.im,3)
-%             tmp2 = figdata{tabnum}.im(:,:,tt);
-%             corrMap(t,tt) = corr(tmp1(:),tmp2(:));
-%         end
-%     end
-%     imagesc(corrMap); ylabel('Image#'); xlabel('Image#');
-%     title('Correlations Image');
-%     assignin('base','xcorrdata',corrMap);
-%end
-%again, co-opt this function to de-sort Maps back to original order.
-function CB_ProjectImage(~,~)
-    [desorted, desort_indices]=sort(roivsmapplot.indices);
-    MapsData.file(:)=MapsData.file(desort_indices);
-    %tab = hTabgroup.SelectedTab; tabnum = str2double(tab.Tag);
-%     tmpfig = findobj('type','figure','Name',sprintf('Figure #%s',tab.Tag));
-%     oldfig = findobj('type','figure','Name',sprintf('Figure #%s Min/Max Projections',tab.Tag));
-%     if ~isempty(oldfig); delete(oldfig); end
-%     newfig=figure('NumberTitle','off','Name',sprintf('Figure #%s Min/Max Projections',tab.Tag), 'Units','normalized', ...
-%         'Position',[tmpfig.Position(1)+tmpfig.Position(3) tmpfig.Position(2) 2*tmpfig.Position(3) tmpfig.Position(4)]);
-%     val = get(findobj(tab,'Tag','cmap_popupmenu'), 'Value');
-%     maxax=axes(newfig,'Position',[0.05 0.05 .4 .9]); imagesc(max(figdata{tabnum}.im,[],3)); axis image off; title('Max Intensity Projection');
-%     colormap(maxax,[cmapstrings{val} '(256)']);
-%     minax=axes(newfig,'Position',[0.55 0.05 .4 .9]); imagesc(min(figdata{tabnum}.im,[],3)); axis image off; title('Min Intensity Projection');
-%     colormap(minax,[cmapstrings{val} '(256)']);
+    oldfig = findobj('type','figure','Name',sprintf('Figure #%s Min/Max Projections',tab.Tag));
+    if ~isempty(oldfig); delete(oldfig); end
+    newfig=figure('NumberTitle','off','Name',sprintf('Figure #%s Min/Max Projections',tab.Tag), 'Units','normalized', ...
+        'Position',[tmpfig.Position(1)+tmpfig.Position(3) tmpfig.Position(2) 2*tmpfig.Position(3) tmpfig.Position(4)]);
+    val = get(findobj(tab,'Tag','cmap_popupmenu'), 'Value');
+    maxax=axes(newfig,'Position',[0.05 0.05 .4 .9]); imagesc(max(figdata{tabnum}.im,[],3)); axis image off; title('Max Intensity Projection');
+    colormap(maxax,[cmapstrings{val} '(256)']);
+    minax=axes(newfig,'Position',[0.55 0.05 .4 .9]); imagesc(min(figdata{tabnum}.im,[],3)); axis image off; title('Min Intensity Projection');
+    colormap(minax,[cmapstrings{val} '(256)']);
 end
 
 % % function CBsavePlotData(~,~)
@@ -2418,7 +2274,7 @@ function CB_ORfile(~,~)
                 tmpdata = mean(tmp(interp2(MapsData.roi(r).mask)>0));
             else
                 tmpdata = mean(tmp(MapsData.roi(r).mask>0));
-            end                  
+            end
             roivsodordata(r,t) = mean(tmpdata(:));
         end
     end
@@ -2438,8 +2294,8 @@ function CB_ORfile(~,~)
     ORdata.Maps = maps;
     ORdata.Reg = registration;
     ORdata.MetaData = metadata;
-    tmpoutname = fullfile(MapsData.file(1).dir,'tmp.mat');
-    [outname,outpath] = uiputfile('*.mat','Select file name', tmpoutname);
+    tmpoutname = fullfile(MapsData.file(1).dir,'tmp.mwlab_ORdata');
+    [outname,outpath] = uiputfile('*.mwlab_ORdata','Select file name', tmpoutname);
     if ~outname; return; end
     save(fullfile(outpath,outname),'ORdata','-mat');
 

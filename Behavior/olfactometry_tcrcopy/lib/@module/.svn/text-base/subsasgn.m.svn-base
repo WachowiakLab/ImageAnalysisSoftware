@@ -1,0 +1,3 @@
+function m = subsasgn(m, s, var)
+    m.public = subsasgn(m.public, s, var);
+end

@@ -1,0 +1,11 @@
+function [x prob] = cumprob(data,nozero)
+    if nargin < 2
+        nozero = false;
+    end
+    [n,x] = hist(data,unique(data));
+    prob = cumsum(n) ./ length(data);
+    if ~nozero
+        x = [0 x];
+        prob = [0 prob];
+    end
+end

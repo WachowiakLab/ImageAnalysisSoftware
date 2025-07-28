@@ -1,0 +1,47 @@
+function varargout = write_det(dets, filepath, comments)
+    % writes a neuroplex detector file, using the ROIs in the cell array dets,
+    % where each cell contains an array with a ROI's pixel numbers
+    % comments (if given) are added to the file after the first value in the detector
+    if nargout
+        varargout{1} = '';
+    end
+    if nargin < 2 || isequal(filepath,0)
+        [filename, pathstr] = uiputfile(['',{'*.det','Neuroplex detector files (*.det)'}],'Save det file as...');
+        if isequal(filename,0)
+            return
+        end
+    else
+        [pathstr, name, ext] = fileparts(filepath);
+        filename = [name,ext];
+    end
+    
+    if nargin < 3
+        comments = '';
+    end
+    if ischar(comments)
+        comments = repmat({comments},size(dets));
+    elseif length(comments) ~= length(dets)
+        error('The length of the comments doesn''t match the detectors.')
+    end
+    try
+        fid = fopen(fullfile(pathstr, filename),'wt');
+    catch
+        error(['The file could not be written: ' fullfile(pathstr, filename)])
+    end
+    for i = 1:length(dets)
+        dets{i} = sort(dets{i});
+        if isempty(comments{i})
+            fprintf(fid, '%i\n', dets{i}(1));
+        else
+            fprintf(fid, '%i %s\n', dets{i}(1), comments{i});
+        end
+        if length(dets{i}) > 1
+            fprintf(fid, '%i\n', dets{i}(2:end));
+        end
+        fprintf(fid, ',\n');
+    end
+    fclose(fid);
+    if nargout
+        varargout{1} = fullfile(pathstr, filename); %file writing was successful
+    end
+end

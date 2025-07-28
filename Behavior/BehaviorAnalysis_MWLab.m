@@ -114,7 +114,7 @@ uicontrol(hBA,'style','pushbutton','Units','Normalized','Position',[.10 .02 .08 
 hpanel = uipanel(hBA,'Units','Normalized','Position',[.195 0.01 .7 .98]);
 hAx = axes(hpanel,'Units','Normalized','Position',[ 0 0.03 1 .97]);
 %ephys list
-ephysstr = {'Aux1(odor)','Aux2(sniff)','ephys-odor','ephys-sniff','ephys-lick','ephys-valence','ephys-velocity','det-sniff'}; %MW added lick 2/5/23
+ephysstr = {'Aux1(odor)','Aux2(sniff)','ephys-odor','ephys-sniff','ephys-lick','ephys-valence','det-sniff'}; %MW added lick 2/5/23
 uicontrol(hBA,'style','text','Units','Normalized','Position',[.9 .97 .1 .02], ...
     'FontSize',9,'String','EPhys Signals to Display:','BackgroundColor',BGCol);
 uicontrol(hBA,'tag','ephys','style','listbox','Units','Normalized','Position',...
@@ -278,17 +278,12 @@ function CB_UpdatePlot(~,~)
                 sig = ( ( behaviordata.trials(T).ephys.lick - min(behaviordata.trials(T).ephys.lick(:)) )./ ...
                     max(range(behaviordata.trials(T).ephys.lick),5) ).*0.2 +0.8;
                 plot(hAx,tim,sig);
-            case ephysstr{6} %ephys-valence
+             case ephysstr{6} %ephys-puff
                 tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
                 sig = ( ( behaviordata.trials(T).ephys.valence - min(behaviordata.trials(T).ephys.valence(:)) )./ ...
                     max(range(behaviordata.trials(T).ephys.valence),5) ).*0.2 +0.8;
                 plot(hAx,tim,sig);
-            case ephysstr{7} %ephys-velocity
-                tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
-                sig = ( ( behaviordata.trials(T).ephys.velocity - min(behaviordata.trials(T).ephys.velocity(:)) )./ ...
-                    max(range(behaviordata.trials(T).ephys.velocity),5) ).*0.2 +0.8;
-                plot(hAx,tim,sig);
-            case ephysstr{8} %'det-sniff'
+            case ephysstr{7} %'det-sniff'
                 tim = behaviordata.trials(T).ephys.times-behaviordata.trials(T).ephys.times(1);
                 sig = ( ( behaviordata.trials(T).det_sniffs.sniffs - min(behaviordata.trials(T).det_sniffs.sniffs(:)) )./ ...
                     max(range(behaviordata.trials(T).det_sniffs.sniffs),5) ).*0.2 +0.8;

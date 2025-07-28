@@ -58,7 +58,7 @@ switch datatype
         %metastr = evalc('sbxinfo'); omitted by MW. This is silly.
         metastr=['file info: ', newline];
         tmpfields = fields(sbxinfo);
-        %assignin('base','sbxinfo',sbxinfo);  %mwadded
+        assignin('base','sbxinfo',sbxinfo);  %mwadded
         for f=1:length(tmpfields)
 %             if ~isstruct(sbxinfo.(tmpfields{f}))
 %                 metastr = [metastr sprintf('sbxinfo.%s: ',tmpfields{f}) sprintf(' %s',string(sbxinfo.(tmpfields{f}))) newline];

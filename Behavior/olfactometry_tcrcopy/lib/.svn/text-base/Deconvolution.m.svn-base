@@ -1,0 +1,42 @@
+function m = Deconvolution
+    m = module(@deconvolve);
+
+    INITIALIZED = false;
+    initialized_samplingrate = 0;
+
+    tau = 0.248;
+    butter_Wn = 7.5; %Hz
+    
+    butter_a = 0; butter_b = 0; kernelpad = 0; kernel = 0;
+    
+    function initialize_module(samplingrate)
+        if (~INITIALIZED || samplingrate ~= initialized_samplingrate)
+            %disp(['initializing freq=', num2str(samplingrate)])
+            kernellength = round(2 * tau * samplingrate) - 1;
+            
+            kernelpad = zeros(1, kernellength);
+            kernel = exp((0:-1:-kernellength) / (tau * samplingrate));
+
+            [butter_b, butter_a] = butter(4, butter_Wn / (samplingrate / 2));
+            
+            initialized_samplingrate = samplingrate;
+            INITIALIZED = true;
+        end
+    end
+    
+    function deconv_tr = deconvolve(tr,samplingrate)
+    %DECONVOLVE  Deconvolves an exponential from the given trace
+    % Trace should be divided by the resting light (RLI) prior to calling this function.
+    % Example usage:
+    %    tr = o.trials(1).rois.traces(glom_num,:) ./ o.trials(1).rois.RLIs(glom_num);
+    %    deconv_tr = Deconvolution.deconvolve(tr,o.trials(1).rois.samplingrate);
+    %
+        initialize_module(samplingrate)
+            
+        filt_tr = filtfilt(butter_b,butter_a,tr);
+        deconv_tr = deconv([filt_tr kernelpad], kernel);
+
+    end
+
+
+end

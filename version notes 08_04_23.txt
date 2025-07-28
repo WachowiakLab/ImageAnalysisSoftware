@@ -1,0 +1,22 @@
+Notes on 12_03_22 version:
+
+MW edited MapsAnalysis code to change order of iamge processing, so that min and max cutoff vlauesa re applied FIRST, before low thresold fracitonal cutoff is applied. This more intuitive.
+
+Note that alternte version (e.g., 'MapsAnalysis...._gridmpaps' generates maps images with grid overlaid for visual references.
+Also a version of Maps Analysis that does autoarchinving of maps as well as rotation of maps.
+
+Also, Dec 2022, modified Behav analysis so it Extracts sniff traces in a single 3D array and also generates STAs per each ROI in a single array.
+Note still need to copy in latest file for loading files that TCR modified to read in new TSM files... 
+
+June 2023:
+
+ImageAnalysis:
+MW modified how reading existing .align files works - uses existing idx vals in case not the whole file was used for alignment.
+
+BatchProcessing: MW modified cases for doing alignment, alllowing to specify start frame to use for alignment.
+
+Aug 2023 updates:
+
+- added 'Merge ROIs' button to ImageAnalysis, which merges all selected ROIs into a single, new, ROI.
+
+- 'loadScanData' updated to show scanbox info in the Info box.

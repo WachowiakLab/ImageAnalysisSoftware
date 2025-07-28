@@ -1,0 +1,18 @@
+function r = sbxlocate_log_sorted(id)
+
+% searches for logs with the given id and returns all of them that have
+% been sorted
+
+d = sbxdatadirs;
+r = {};
+
+for i = 1:length(d)
+    q = dir(d{i});       % for each entry in the directory
+    for k =1:length(q)
+        if q(k).name(1) ~= '.' && q(k).isdir
+            root = [d{i} '\' q(k).name];
+            m = dir([root '\*log_' num2str(id)]);
+            r
+        end 
+    end
+end

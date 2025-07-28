@@ -12,12 +12,12 @@ bAlignFiles = true; %align image frames within each file (see AlignImages_MWLab.
 bAlignMeanFiles= false; %align mean images across all files (see AlignMeanImages_MWLab.m)
 
 %time series settings
-bComputeTSdata = true; %compute ROI timeseries data if ROIs file is available
+bComputeTSdata = false; %compute ROI timeseries data if ROIs file is available
 roispath = ''; %path of rois file (optional) - you will select rois file if bComputeTSdata = true and this is empty
 roisfile = ''; %name of rois file (optional) - you will select rois file if bComputeTSdata = true and this is empty
 
 %difference maps settings
-bMakeMaps = true; %make difference maps data struct (MapsData - see MapsAnalysis for more info)
+bMakeMaps = false; %make difference maps data struct (MapsData - see MapsAnalysis for more info)
 auxtypes = getauxtypes; %run getauxtypes to see options for stim2use
 MapsData.stim2use = auxtypes{1}; %'Aux1(odor)','Aux2(sniff)', 'AuxCombo(sniff w/odor)', or 'Define Stimulus Manually'
 if strcmp(MapsData.stim2use,auxtypes{3}) %AuxCombo(sniff w/odor): odor duration(secs) 
@@ -80,6 +80,11 @@ end
 
 %image alignment, note: if only bAlignFiles is true, do it inside loop so files are only loaded once
 if bAlignFiles && bAlignMeanFiles
+    %%%%%%MW added to allow specifying start frames for aligning
+     answer = inputdlg('Enter start frame for alignment','start frame',1,{'10'});
+        if isempty(answer); return; end
+        startframe = str2double(answer); %frameRate(sec)            
+     %%%%%%%%%%%%%%%%%%%%%%%%   
     disp('Aligning Image Files');
     tmpbar = waitbar(0,'Aligning Image Files');
     for f = 1:numel(fnames)
@@ -92,7 +97,8 @@ if bAlignFiles && bAlignMeanFiles
         else
             tmpdata = loadFile_MWLab(datatype,fpath,fnames{f});
         end
-        alignImage_MWLab(tmpdata); %results saved in .align file
+        idx=1:tmpdata.frames;
+        alignImage_MWLab(tmpdata,idx(startframe:end)); %results saved in .align file
         clear tmpdata;
     end
     close(tmpbar);
@@ -111,6 +117,12 @@ if bAlignMeanFiles
 end
 
 %main data processing
+ %%%%%%MW added to allow specifying start frames for aligning
+        answer = inputdlg('Enter start frame for alignment','start frame',1,{'1'});
+        if isempty(answer); return; end
+        startframe = str2double(answer); %frameRate(sec)            
+ %%%%%%%%%%%%%%%%%%%%%%%%   
+
 ff = 0; %keep track of files with two-channels
 tmpbar = waitbar(0,'Processing Data Files');
 for f = 1:numel(fnames)
@@ -121,6 +133,7 @@ for f = 1:numel(fnames)
     else
         tmpdata = loadFile_MWLab(datatype,fpath,fnames{f});
     end
+    idx=1:tmpdata.frames;  %MW added june 2023
     if iscell(tmpdata.im); ff=ff+2; else; ff=ff+1; end
     %apply alignments if .align file exists
     iDot = strfind(tmpdata.name,'.'); if isempty(iDot); iDot=length(tmpdata.name); end
@@ -129,7 +142,13 @@ for f = 1:numel(fnames)
         disp('Aligning Image File');
         %delete old alignment files
         if exist(alignfile,'file')==2; delete(alignfile); end;
-        [tmpdata,~,~] = alignImage_MWLab(tmpdata); %results saved in .align file
+        [tmpdata,~,~] = alignImage_MWLab(tmpdata,idx(startframe:end)); %results saved in .align file
+        
+%        outputs: varargout{1} = aligned image
+%                varargout{2} = (m) mean aligned image
+%                varargout{3} = (T) frame shifts matrix (1:frames, [rowshift, colshift])
+%      example: [newim, m, T] = alignImage_MWLab(oldim)
+
         tmpdata.name = [tmpdata.name(1:iDot-1) '_aligned' tmpdata.name(iDot:end)];
     elseif exist(alignfile,'file')==2 %apply any alignments done previously
         tmp = load(alignfile,'-mat');

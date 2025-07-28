@@ -1,0 +1,9 @@
+function varargout = colon(m,fcn)
+    str = func2str(fcn);
+    if isa(m.public.(str),'function_handle')
+        varargout = cell(1,max(nargout,nargout(m.public.(str))));
+        [varargout{:}] = m.public.(str)();
+    else
+        varargout = {m.public.(str)};
+    end
+end

@@ -1,0 +1,345 @@
+function t = listbox(f)
+    required_columns = {};
+    if strcmp(get(f,'Type'),'Figure')
+        column_menu = uicontextmenu('Parent',f);
+    else
+        column_menu = uicontextmenu('Parent',ancestor(f,'figure'));
+    end
+    column_menu_items = [];
+
+    column_lookup = {};
+    columnDefault = struct('width',100,'text','');
+    
+    tableModel = javax.swing.table.DefaultTableModel;
+    columnModel = javax.swing.table.DefaultTableColumnModel;
+    
+    t.table = com.mathworks.mwswing.DefaultSortableTable(tableModel,columnModel);
+
+    %editing stuff
+    cellEditor = javax.swing.DefaultCellEditor(javax.swing.JTextField);
+    cellEditor.setClickCountToStart(10000)
+    t.table.setDefaultEditor(java.lang.Object().getClass,cellEditor) 
+	hTable = handle(t.table, 'CallbackProperties');
+    hTable.set('KeyTypedCallback', @key_typed)
+
+    %JTable focus bug fix
+    t.table.putClientProperty('terminateEditOnFocusLost', java.lang.Boolean.TRUE);
+    t.table.setAutoResizeMode(javax.swing.JTable.AUTO_RESIZE_OFF)
+    t.table.setShowGrid(false)
+    t.table.setIntercellSpacing(java.awt.Dimension(0,0))
+    hTable.set('MouseClickedCallback', @mouse_click)
+	hTableHeader = handle(t.table.getTableHeader, 'CallbackProperties');
+    hTableHeader.set('MouseClickedCallback', @header_click)
+
+    %put the table in something we can see
+    scroller = javax.swing.JScrollPane(t.table,javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+    [hcomp, t.box] = javacomponent(scroller,[],f);
+    t.scroller_obj = handle(scroller);
+    t.scroller_obj.getLayout.getViewport.setBackground(java.awt.Color(1,1,1))
+    %t.scroller_obj.setBorder(t.scroller_obj.Border.createBlackLineBorder)
+
+    t.clear_data = @clear_data;
+    t.set_data = @set_data;
+    t.update_data = @update_data;
+    t.set_columns = @set_columns;
+    t.get_columns = @get_columns;
+    t.add_column = @add_column;
+    t.remove_column = @remove_column;
+    t.set_column_lookup_pref = @set_column_lookup_pref;
+    t.refresh_column_lookup_pref = @refresh_column_lookup_pref;
+    t.getSelectedItems = @getSelectedItems;
+    t.setSelectedItem = @setSelectedItem;
+    t.selectNext = @selectNext;
+    t.selectPrev = @selectPrev;
+    
+    mouseClickCallback = [];
+    
+    t.setMouseClickCallback = @setMouseClickCallback; %is passed a struct with event details
+
+    function update_data(data)
+        siz = size(data);
+        if siz(2)+1 ~= tableModel.getColumnCount
+            error('different number of columns')
+        end
+        sort_col = t.table.getSortColumn;
+        sort_dir = t.table.getSortDirection;
+        tableModel.setNumRows(siz(1));
+
+        dataVect = tableModel.getDataVector;
+        %make column identifiers vector
+        colVect = java.util.Vector(tableModel.getColumnCount);
+        for ci = 0:tableModel.getColumnCount-1
+            colVect.add(ci,tableModel.getColumnName(ci))
+        end
+        tableModel = javax.swing.table.DefaultTableModel(dataVect,colVect);
+        %add hidden column containing original indices
+        for ri = 1:siz(1)
+            tableModel.setValueAt(ri,ri-1,0)
+        end
+        for ci = 1:siz(2)
+            for ri = 1:siz(1)
+                tableModel.setValueAt(data{ri,ci},ri-1,ci)
+            end
+        end
+        t.table.setModel(tableModel)
+        t.table.sortByColumn(sort_col,sort_dir)
+    end
+    
+    function setSelectedItem(row)
+        for r = 0:tableModel.getRowCount-1
+            if t.table.getModel.getValueAt(r,0) == row
+                setSelectedItemVisibleIndex(r)
+            end
+        end
+    end
+    
+    function clear_data
+        tableModel = javax.swing.table.DefaultTableModel(0,0);
+        t.table.getModel.setModel(tableModel)
+        t.scroller_obj.repaint
+    end
+    
+    function set_data(headers,data,required)
+        refresh_column_lookup_pref
+        [cols widths texts] = get_columns;
+        sort_col = t.table.getSortColumn;
+        sort_by = tableModel.getColumnName(sort_col);
+        sort_dir = t.table.getSortDirection;
+        clear_columns
+        if iscell(required)
+            required_columns = required;
+        else
+            required_columns = {required};
+        end
+        siz = size(data); %[numRows numCols]
+        tableModel = javax.swing.table.DefaultTableModel(siz(1),0);
+
+        delete(get(column_menu,'Children'))
+        column_menu_rename = uimenu(column_menu,'Label','Rename');
+        column_menu_items = zeros(1,siz(2));
+        %add hidden column containing original indices
+        tableModel.addColumn('hiddenIndex')
+        for ri = 1:siz(1)
+            tableModel.setValueAt(ri,ri-1,0)
+        end
+        
+        for ci = 1:siz(2)
+            column_menu_items(ci) = uimenu(column_menu,'Label',headers{ci},'Checked','off','Callback',@(varargin)add_column(headers{ci}));
+            if ismember(headers{ci},required_columns)
+                set(column_menu_items(ci),'Enable','off');
+            end
+
+            uimenu(column_menu_rename,'Label',headers{ci},'Callback',@(varargin)rename_column(headers{ci}));
+            tableModel.addColumn(headers{ci})
+            for ri = 1:siz(1)
+                tableModel.setValueAt(data{ri,ci},ri-1,ci)
+            end
+        end
+        t.table.getModel.setModel(tableModel)
+        set_columns(cols, widths, texts)
+        sort_by_column(sort_by,sort_dir)
+        set(column_menu_rename,'Position',siz(2)+1)
+        t.scroller_obj.repaint
+    end
+    
+    function set_columns(columns_to_display, widths, texts)
+        if ~iscell(columns_to_display)
+            columns_to_display = {columns_to_display};
+        end
+        for ci = 1:tableModel.getColumnCount
+            remove_column(char(tableModel.getColumnName(ci)))
+        end
+        for ci = 1:length(columns_to_display)
+            if nargin == 3
+                add_column(columns_to_display{ci}, struct('width',widths(ci),'text',texts{ci}))
+            else
+                add_column(columns_to_display{ci})
+            end
+        end
+        for ci = 1:length(required_columns)
+            add_column(required_columns{ci})
+        end
+    end
+    
+    function sort_by_column(colname, dir)
+        c = tableModel.findColumn(colname);
+        if c < 0
+            c = 0;
+        end
+        t.table.sortByColumn(c, dir)
+    end
+    
+    function [cols widths texts] = get_columns
+        widths = zeros(1,columnModel.getColumnCount);
+        cols = cell(size(widths));
+        texts = cell(size(widths));
+
+        for n = 1:columnModel.getColumnCount
+            cols{n} = char(columnModel.getColumn(n-1).getIdentifier);
+            widths(n) = double(columnModel.getColumn(n-1).getWidth);
+            texts{n} = char(columnModel.getColumn(n-1).getHeaderValue);
+        end
+    end
+    
+    function add_column(colname,column_pref)
+        c = tableModel.findColumn(colname);
+        if c >= 0 && strcmp(get(column_menu_items(c),'Checked'),'off')
+            if nargin < 2
+                if ~isempty(column_lookup)
+                    pref = getpref(column_lookup{:});
+                end
+                if exist('pref','var') && isfield(pref,colname)
+                    column_pref = pref.(colname);
+                else
+                    column_pref = columnDefault;
+                end
+            end
+
+            col = javax.swing.table.TableColumn(c,column_pref.width);
+            col.setIdentifier(colname);
+
+            if isempty(column_pref.text)
+                col.setHeaderValue(colname);
+            else
+                col.setHeaderValue(column_pref.text);
+            end
+                
+            columnModel.addColumn(col);
+
+            set(column_menu_items(c),'Checked','on','Callback',@(varargin)remove_column(colname));
+        end
+    end
+
+    function clear_columns
+        columnModel = javax.swing.table.DefaultTableColumnModel;
+        t.table.setColumnModel(columnModel)
+        set(column_menu_items,'Checked','off','Callback',@(varargin)add_column(colname))
+    end
+    
+    function remove_column(colname)
+        c = tableModel.findColumn(colname);
+        if c > 0 && strcmp(get(column_menu_items(c),'Checked'),'on')
+            columnModel.removeColumn(t.table.getColumn(colname))
+            set(column_menu_items(c),'Checked','off','Callback',@(varargin)add_column(colname))
+        end
+    end
+
+    function rename_column(colname)
+        c = tableModel.findColumn(colname);
+        if c > 0
+            if ~isempty(column_lookup)
+                pref = getpref(column_lookup{:});
+            end
+            
+            if strcmp(get(column_menu_items(c),'Checked'),'on')
+                current = t.table.getColumn(colname).getHeaderValue;
+            else
+                if exist('pref','var') && isfield(pref,colname)
+                    current = pref.(colname).text;
+                else
+                    current = colname;
+                end
+            end
+            resp = inputdlg(['Please provide a name for ' colname], 'Rename column', 1, {current});
+            if ~isempty(resp) && ~strcmp(resp{1},current)
+                if strcmp(get(column_menu_items(c),'Checked'),'on')
+                    t.table.getColumn(colname).setHeaderValue(resp{1});
+                    t.table.getTableHeader.repaint
+                end
+                if exist('pref','var')
+                    if ~isfield(pref,colname)
+                        pref.(colname) = columnDefault;
+                    end
+                    pref.(colname).text = resp{1};
+                    setpref(column_lookup{:},pref);
+                end
+            end 
+        end
+    end
+    
+    function key_typed(varargin)
+        cellEditor.cancelCellEditing
+    end
+    
+    function mouse_click(src, ev)
+        event = struct('type','','getPosition',@()calc_right_click_position(ev),'getSelectedItems',@getSelectedItems);
+        if ev.getButton == 3 
+            event.type = 'rightClick';
+        elseif ev.getButton == 1
+            switch ev.getClickCount
+                case 1
+                    event.type = 'leftClick';
+                case 2
+                    event.type = 'doubleClick';
+            end
+        end
+        if ~isempty(event.type) && ~isempty(mouseClickCallback)
+            mouseClickCallback(event); %#ok<NOEFF>
+        end
+    end
+
+    function header_click(src, ev)
+        if ev.getButton == 3
+            set(column_menu,'Position',calc_right_click_position(ev),'Visible','on')
+        end
+    end
+
+    function pos = calc_right_click_position(ev)
+        p = ev.getPoint;
+        s = get(t.box,'Position');
+        pos = [s(1)+p.getX-t.scroller_obj.getHorizontalScrollBar.getValue s(2)+s(4)-p.getY+t.scroller_obj.getVerticalScrollBar.getValue];
+    end
+    
+    function sel = getSelectedItems
+        sel = double(t.table.getSelectedRows);
+        for s = 1:length(sel)
+            sel(s) = t.table.getModel.getValueAt(sel(s),0);
+        end
+    end
+
+    function setSelectedItemVisibleIndex(sel)
+        t.table.setRowSelectionInterval(sel,sel)
+    end
+    
+    function selectNext
+        sel = double(t.table.getSelectedRows) + 1;
+        if isempty(sel)
+            sel = 0;
+        elseif sel(end) >= t.table.getRowCount
+            sel = t.table.getRowCount - 1;
+        end
+        setSelectedItemVisibleIndex(sel(end))
+    end
+    
+    function selectPrev
+        sel = double(t.table.getSelectedRows) - 1;
+        if isempty(sel) || sel(end) < 0
+            sel = 0;
+        end
+        setSelectedItemVisibleIndex(sel(end))
+    end
+    
+    function set_column_lookup_pref(group,pref)
+        if ~ispref(group,pref)
+            setpref(group,pref,struct);
+        end
+        column_lookup = {group pref};
+    end
+    
+    function refresh_column_lookup_pref
+        if ~isempty(column_lookup)
+            [cols widths texts] = get_columns;
+            pref = getpref(column_lookup{:});
+            for n = 1:length(cols)
+                pref.(cols{n}).width = widths(n);
+                pref.(cols{n}).text = texts{n};
+            end
+            setpref(column_lookup{:},pref);
+        end
+    end
+    
+	function setMouseClickCallback(fcn)
+        mouseClickCallback = fcn;
+    end
+    
+end

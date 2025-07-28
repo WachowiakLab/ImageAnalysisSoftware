@@ -396,7 +396,7 @@ uicontrol('Style', 'pushbutton', 'Units', 'normalized', 'Position', [0.51 0.345 
     'String', 'Load ROIs','FontWeight','Bold', 'Callback', @CBloadROIs);
 %tcr could make this button do Background ROI
 uicontrol('Style', 'pushbutton', 'Units', 'normalized', 'Position', [0.46 0.305 0.05 0.04],...
-    'String', 'Auto ROIs','FontWeight', 'Bold', 'Callback', {@autoROI_button_fcn,gcf}, 'Enable','off');
+    'String', 'Merge ROIs','FontWeight', 'Bold', 'Callback', @CBmergeROIs);%, 'Enable','off');
 uicontrol('Style', 'pushbutton', 'Units', 'normalized', 'Position', [0.51 0.305 0.05 0.04],...
     'String', 'Shift ROI(s)', 'Fontweight', 'Bold', 'Callback', @CBshiftROIsButton_fcn);
 uicontrol('Style', 'pushbutton', 'Units', 'normalized', 'Position', [0.46 0.265 0.05 0.04],...
@@ -508,7 +508,7 @@ function CBaddFiles(~, ~) %do not load images here!
                 ext = '.xml'; %might try using uigetfolder for multiple files
                 [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'Off');
             case 'neuroplex'
-                ext = '.da';
+                ext = {'*.da;*.tsm','Neuroplex Files'};
                 [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'On');
                 IAdata.aux2bncmap = assignNeuroplexBNC;
             case 'tif' %Standard .tif
@@ -605,7 +605,7 @@ function CBloadSelected(~,~)
         IAsettings.path = IAdata.file(selected).dir;
         IAdata.currentAux1 = []; IAdata.currentAux2 = []; %reset aux signals
         if isfield(IAdata,'currentAux3'); IAdata = rmfield(IAdata,'currentAux3'); end
-        if isfield(IAdata,'currentEphys'); IAdata = rmfield(IAdata,'currentEphys'); end
+        %if isfield(IAdata,'currentEphys'); IAdata = rmfield(IAdata,'currentEphys'); end
         if isfield(IAdata,'def_stimulus'); IAdata=rmfield(IAdata,'def_stimulus'); end
 %         set(findobj(hIA,'Tag','Aux'),'Value', 1);
 %         set(findobj(hIA,'Tag','stim2frames'),'Enable','off');
@@ -736,6 +736,7 @@ function CBloadSelected(~,~)
         IAsettings.path = IAdata.file(selected(1)).dir;
         clear newdata;
     end
+    %assignin('base','allimagedata',IAdata);  %MW added
     set(findobj(hIA,'Tag','subtractBG'),'enable','on');
     if get(findobj(hIA,'Tag','align_checkbox'),'Value'); CBalign; end
     %put image info in gui
@@ -780,16 +781,20 @@ function CBalign(~,~)
         selected = get(findobj(hIA,'Tag','name_listbox'),'Value');
         dot = strfind(IAdata.currentimagename,'.'); if isempty(dot);dot=length(IAdata.currentimagename); end
         alignfile = fullfile(IAdata.file(selected).dir,[IAdata.currentimagename(1:dot) 'align']);
+          
+        
         useit = 0;
         if exist(alignfile,'file')==2
             tmp = load(alignfile,'-mat');
+            assignin('base','aligninfo',tmp); %added by MW
             m=tmp.m; T = tmp.T;
-            if ~isempty(T) && isequal(idx,tmp.idx)
+            if ~isempty(T) %&& isequal(idx,tmp.idx)   %MW changed - don't worry about maching idx vals.
                 use = questdlg('Existing .align file found, Would you like to use it?',...
                     'Use existing?','Yes','No','Yes');
-                if strcmp(use,'Yes'); useit = 1; end
+                if strcmp(use,'Yes'); useit = 1; idx = tmp.idx; end
             end
         end
+        
         if ~useit
             if iscell(IAdata.currentimage); [~,m,T] = alignImage_MWLab(IAdata.currentimage{1},idx);
             else; [~,m,T] = alignImage_MWLab(IAdata.currentimage,idx); end
@@ -1213,6 +1218,24 @@ function CBclearROIs(~,~) %clear all ROIs
     if ~isfield(IAdata,'roi'); return; end
     set(findobj(hIA,'Tag','roi_listbox'),'String',''); set(findobj(hIA,'Tag','roi_listbox'),'Value',0);
     IAdata.roi = [];
+    hAx_ax2 = findobj(hIA,'Tag','ax2');
+    hIA.UserData.IAdata = IAdata;
+    overlayContours(hAx_ax2);
+end
+
+%%%MW adding this part to allow to merge ROIs.
+function CBmergeROIs(~, ~)
+    %define newroi..
+     if ~isfield(IAdata,'roi') || isempty(IAdata.roi); return; end
+    selectedrois = get(findobj(hIA,'Tag','roi_listbox'), 'Value'); %taken from shiftROIs function.
+    numrois=length(IAdata.roi);
+    combinedroi=IAdata.roi(selectedrois(1)).mask;
+    for r = 1:length(selectedrois)
+        combinedroi=combinedroi | IAdata.roi(selectedrois(r)).mask;
+       % IAdata.roi(selectedrois(r)).mask = circshift(IAdata.roi(selectedrois(r)).mask,[rowshift,colshift]);
+    end
+   % assignin('base','mergedrois',combinedroi);
+    IAdata.roi(numrois+1).mask=combinedroi;
     hAx_ax2 = findobj(hIA,'Tag','ax2');
     hIA.UserData.IAdata = IAdata;
     overlayContours(hAx_ax2);
@@ -1658,11 +1681,24 @@ function drawFig2(~,~) %show processed image on right side
                     end
                 end
                 delete(tmpwait)
-            else
+            else   %this part below MW hijacking to plot correlation with sniff.....
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                origsniff=IAdata.currentEphys.sniff;
+                [framenums, newframeindices]=unique(IAdata.currentEphys.framenum);
+                newsniff=origsniff(newframeindices);
+                newsniff=newsniff-mean(newsniff);
+                numframes=size(tmpim,3);
+                framediff=numel(newsniff)-numframes;
+                newsniff(1:framediff)=[];
+                numrows=size(tmpim,1); numcols=size(tmpim,2);
                 tmpwait = waitbar(0,'computing 10th prctile image');
                 for i = 1:size(tmpim,1)
                     waitbar(i/size(tmpim,1),tmpwait);
-                    imA(i,:) = prctile(tmpim(i,:,:), 10, 3);
+                    
+                    
+                    
+                    
+                   % imA(i,:) = prctile(tmpim(i,:,:), 10, 3);
                 end
                 delete(tmpwait)
             end

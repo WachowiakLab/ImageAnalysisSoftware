@@ -1,0 +1,270 @@
+function m = Neuroplex
+    m = module(@import_da, @extract_comments, @import_da_dir, @import_da_dir_with_memmapping, @load_da_filenames, @read_omit, @write_omit);
+
+    function o = import_da(filepath)
+        % modified from analysis_software\matlab\read_NP.m file
+        % does basically the same thing, but returns a structure with the data
+        if nargin == 0
+            [filename, pathstr] = uigetfile(['',{'*.da','Neuroplex data files (*.da)'}],'Choose *.da file');
+            if isequal(filename,0)
+                o = [];
+                return
+            end
+        else
+            [pathstr, name, ext] = fileparts(filepath);
+            filename = [name,ext];
+        end
+        try
+            fid = fopen(fullfile(pathstr, filename));
+            fseek(fid,0,'bof');
+        catch
+            warning('ImportDa:missingFile','The file was not found.')
+            o = [];
+            return
+        end
+
+        o.filename = filename;
+        A = fread(fid, 400,'uint16'); %Reads 400 16-bit unsigned integers
+        o.numtrialavg = A(2);
+        if o.numtrialavg < 1
+            o.corrupted = true;
+            o.numsamples = 0; o.frameinterval = 0; o.samplingrate = 0; o.acquisition_time = 0; o.BNCfactor = 0;
+            o.timestamp = 0;
+            o.comment = '(file corrupted)';
+            o.BNCs = []; o.data = [];
+        else
+            o.corrupted = false;
+            o.numsamples = A(5);
+            num_cols = A(385);
+            num_rows = A(386);
+            %Num_Pixels = A(97); %referring to 8 BNCs?
+            o.frameinterval = A(389)/1000*A(391); %in msec (A(391) is the dividing factor)
+            o.samplingrate = 1000/o.frameinterval; %Hz
+            o.acquisition_time = o.numsamples * o.frameinterval; %in msec
+            o.BNCfactor = A(392);
+            if o.BNCfactor == 0;
+                o.BNCfactor = 1;
+            end
+
+            fseek(fid,26,'bof');
+            o.timestamp = datenum(fread(fid,16,'*char',1)','HH:MM:SSddmmmyy',2000);
+
+            fseek(fid,256,'bof');
+            o.comment = deblank((fread(fid,159,'*char',1))');
+
+            fseek(fid,5120,'bof');
+            data = fread(fid,[o.numsamples,num_cols*num_rows],'*int16');
+
+            o.BNCs = fread(fid, [o.numsamples*o.BNCfactor,8], '*int16')';
+
+            dark_frame = fread(fid,num_cols*num_rows,'*int16')';
+            data = bsxfun(@minus, data, dark_frame);
+
+            o.data = reshape(data, o.numsamples, num_cols, num_rows);
+
+        end
+        fclose(fid);
+    end
+
+    function extract_comments(varargin)
+        [o, dirname] = import_da_dir(varargin{:});
+        if ~isempty(o)
+            [file,path] = uiputfile([dirname 'info.txt']);
+            if isequal(file,0)
+                return
+            end
+            fid = fopen(fullfile(path,file),'w');
+            for n = 1:length(o)
+                fprintf(fid,'%s\t%s\t%s\r\n',o(n).filename,datestr(o(n).timestamp),o(n).comment);
+            end
+            fclose(fid);
+        end
+    end
+
+    function [path, dirname, files] = load_da_filenames(path)
+        if nargin == 0
+            if ~ispref('Olfactometry','previous_src_dirname')
+                setpref('Olfactometry','previous_src_dirname','')
+            end
+            path = uigetdir(getpref('Olfactometry','previous_src_dirname'),'Choose directory containing *.da files');
+        end
+        if isequal(path,0) || ~isdir(path)
+            dirname = '';
+            files = [];
+            return
+        end
+        dirname = regexprep(path,['(.*)\' filesep],'');
+        files = dir(fullfile(path,'*.da'));
+        if isempty(files)
+            return
+        end
+        setpref('Olfactometry','previous_src_dirname',path)
+    end
+    
+    function [o, dirname, path] = import_da_dir(path,channels,bnc_boolean_thresh)
+        % modified from analysis_software\matlab\read_NP.m file
+        % does basically the same thing, but returns a structure with the data
+        if nargin == 0 || isequal(path, 0)
+            [path, dirname, files] = load_da_filenames;
+        else
+            [path, dirname, files] = load_da_filenames(path);
+        end
+        if isempty(files)
+            o = [];
+            return
+        end
+        files = {files.name};
+        if nargin < 3
+            channels = {''};
+        end
+        odor_onoff_chan = find(strcmp('Odor On/Off',channels));
+        lick_chan = find(strcmp('Lick',channels));
+        odor_valence_chan = find(strcmp('S+/S-',channels));
+        odor_coding_chan = find(strcmp('Odor coding',channels));
+        
+        default_o = struct('name','','timestamp',0,'comment','','numtrialavg',0,'samplingrate',0,...
+            'trial_length',0,'odorant_valence','','licked','','licktime',0,'odor_onset',[],'odor_offset',[],'odor_code',0);
+        o = default_o([]);
+        
+        for fi = 1:length(files)
+            fid = fopen(fullfile(path, files{fi}));
+            fseek(fid,0,'bof');
+            o(fi) = default_o;
+            o(fi).name = files{fi};
+            A = fread(fid, 392,'uint16'); %Reads 392 16-bit unsigned integers
+            o(fi).numtrialavg = A(2);
+            if o(fi).numtrialavg < 1
+                o(fi).numtrialavg = 0;
+                o(fi).comment = '(file corrupted)';
+            else
+                o(fi).samplingrate = 1000000/A(389)/A(391); %Hz
+                numsamples = A(5);
+                o(fi).trial_length = numsamples / o(fi).samplingrate; %in s
+                num_cols = A(385);
+                num_rows = A(386);
+                BNCfactor = A(392);
+                fseek(fid,26,'bof');
+                o(fi).timestamp = datenum(fread(fid,16,'*char',1)','HH:MM:SSddmmmyy',2000);
+                
+                fseek(fid,256,'bof');
+                o(fi).comment = deblank((fread(fid,159,'*char',1))');
+                
+                if ~isempty([odor_onoff_chan lick_chan odor_valence_chan odor_coding_chan])
+                    fseek(fid,5120+2*numsamples*num_cols*num_rows,'bof');
+                    BNCs = fread(fid, [numsamples*BNCfactor,8], '*int16')';
+                    if ~isempty(odor_onoff_chan)
+                        odor_on_sample = find(BNCs(odor_onoff_chan,:) > bnc_boolean_thresh, 1);
+                        o(fi).odor_onset = odor_on_sample / (o(fi).samplingrate*BNCfactor);
+                        o(fi).odor_offset = find(BNCs(odor_onoff_chan,:) > bnc_boolean_thresh, 1, 'last') / (o(fi).samplingrate*BNCfactor);
+                        if ~isempty(odor_valence_chan) && ~isempty(odor_on_sample)
+                            search_interval = odor_on_sample+(-100:100);
+                            search_interval = search_interval(0 < search_interval & search_interval < (numsamples * BNCfactor));
+                            if any(BNCs(odor_valence_chan,search_interval) > bnc_boolean_thresh)
+                                o(fi).odorant_valence = '+';
+                            else
+                                o(fi).odorant_valence = '-';
+                            end
+                        end
+                    end
+                    if ~isempty(lick_chan)
+                        o(fi).licktime = find(BNCs(lick_chan,:) < bnc_boolean_thresh, 1) / (o(fi).samplingrate*BNCfactor);
+                        if isempty(o(fi).licktime)
+                            o(fi).licktime = 0;
+                        end
+                        % define "licked" as licking between 3 and 8 seconds
+                        if 3 <= o(fi).licktime && o(fi).licktime <= 8
+                            o(fi).licked = 'licked';
+                        end
+                    end
+                    if ~isempty(odor_coding_chan)
+                        onset = find(BNCs(odor_coding_chan,:) > bnc_boolean_thresh, 1);
+                        l = find(BNCs(odor_coding_chan,onset+1:end) < bnc_boolean_thresh, 1) / (o(fi).samplingrate*BNCfactor) * 10;
+                        o(fi).odor_code = round(l);
+                    end
+                end
+            end
+            fclose(fid);
+        end
+    end
+
+    function o = import_da_dir_with_memmapping(path)
+        if nargin == 0
+            [path, dirname, files] = load_da_filenames;
+        else
+            [path, dirname, files] = load_da_filenames(path);
+        end
+        if isempty(files)
+            o = [];
+            return
+        end
+        files = {files.name};
+        mm = memmapfile(fullfile(path, files{1}),'Offset',2,'Repeat',1,'Format',{...
+            'uint16' [1 1] 'numtrialavg'; ... 2..3
+            'uint8'  [1 4] 'junk1'; ... 4..7
+            'uint16' [1 1] 'numsamples'; ... 8..9
+            'uint8'  [1 16] 'junk2'; ... 10..25
+            'uint8'  [2 16] 'timestampx2'; ... 26..57 (char)
+            'uint8'  [1 198] 'junk3'; ... 58..255
+            'uint8'  [2 159] 'commentx2'; ... 256..573 (char)
+            'uint8'  [1 194] 'junk4'; ... 574..765
+            'uint16' [1 2] 'colsrows'; ... 768..771
+            'uint8'  [1 4] 'junk5'; ... 772..775
+            'uint16' [1 1] 'frameint'; ... 776..779
+            'uint8'  [1 2] 'junk6'; ... 780..783
+            'uint16' [1 1] 'framedivfactor'; ... 784..787
+            });
+        o = get_details_mm(files{1}, mm);
+        for fi = 2:length(files)
+            mm.Filename = fullfile(path, files{fi});
+            o(fi) = get_details_mm(files{fi}, mm);
+        end
+    end
+
+    function o = get_details_mm(filename, mm)
+        o = struct;
+        o.name = filename;
+        try
+            o.timestamp = datenum(char(mm.Data.timestampx2(1,:)),'HH:MM:SSddmmmyy',2000);
+            o.comment = deblank(char(mm.Data.commentx2(1,:)));
+            o.numtrialavg = double(mm.Data.numtrialavg);
+            o.samplingrate = 1000000 / double(mm.Data.framedivfactor) / double(mm.Data.frameint);
+            o.acquisition_time = double(mm.Data.numsamples) / o.samplingrate * 1000; %in ms
+        catch
+            o.timestamp = 0;
+            o.comment = '(file corrupted)';
+            o.numtrialavg = 0;
+            o.samplingrate = 0;
+            o.acquisition_time = 0;
+        end
+    end
+
+    function points = read_omit(filepath)
+        if nargin == 0
+            [filename, pathstr] = uigetfile(['',{'*.omt','Neuroplex omit files (*.omt)'}],'Choose *.omt file');
+            if isequal(filename,0)
+                return
+            end
+        else
+            [pathstr, name, ext, versn] = fileparts(filepath);
+            filename = [name,ext,versn];
+        end
+        fid = fopen(fullfile(pathstr, filename),'rb');
+        t = fread(fid,1,'uint16');
+        points = fread(fid,t,'uint32');
+        fclose(fid);
+    end
+    
+    function write_omit(points, filepath)
+        if nargin < 2
+            [filename, pathstr] = uiputfile(['',{'*.omt','Neuroplex omit file (*.omt)'}],'Save omit file as...');
+            if isequal(filename,0)
+                return
+            end
+            filepath = fullfile(pathstr, filename);
+        end
+        fid = fopen(filepath,'wb');
+        fwrite(fid,length(points),'uint16');
+        fwrite(fid,points,'uint32');
+        fclose(fid)
+    end
+end

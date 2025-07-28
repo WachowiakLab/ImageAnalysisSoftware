@@ -83,6 +83,12 @@ else %output is mwfile struct - save the .align file
     end
     if ~useit %Align
         tmpbar = waitbar(0,'Computing alignment (this may take several minutes)...');
+        %MW note 6/23: try instead aligning to mean of last 50 frames; replace last
+        %frame of 'image' array with mean of its last 50 - an experiment for now.
+        revidx=flip(idx);
+        target=mean(image(:,:,revidx(1:50)),3);
+        lastidx=size(image,3);
+        image(:,:,lastidx)=target;  %rpelace last frame with target image
         [m,T] = alignFrames(image,idx);
         close(tmpbar);
     end

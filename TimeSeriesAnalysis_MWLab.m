@@ -260,7 +260,7 @@ function tabsetup(tab)
     uicontrol(stimpanel,'Tag','hidestim','Style', 'checkbox', 'Units', 'normalized', 'Position', ...
         [0.65 0.85 .35 0.12], 'String', 'Hide stimuli', 'Fontweight', 'Bold', 'Value', hidestimval, ...
         'Fontsize',10,'Callback', @CBSelectAndSortColors,'Enable','off')
-    ephysstr = {'-ephys signals-','odor','sniff','puff'};
+    ephysstr = {'-ephys signals-','odor','sniff','lick','valence'}; %MW modified feb 2023.
     uicontrol(stimpanel,'Tag','ephys','Style','listbox','Units','normalized','Position', ...
         [0.65 0.45 .35 .4],'String',ephysstr,'Max',8,'Visible','off');
     uicontrol(stimpanel,'style','text','Units','normalized','Position',[0.05 0.33 .9 0.1],...
@@ -625,7 +625,7 @@ function CBaddFiles(~,~) %add image file(s) to list (and/or load scanbox realtim
                 ext = '.xml'; %might try using uigetfolder for multiple files
                 [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'Off');
             case 'neuroplex'
-                ext = '.da';
+                ext = {'*.da;*.tsm','Neuroplex Files'};
                 [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'On');
                 TSdata.aux2bncmap = assignNeuroplexBNC;
             case 'tif' %Standard .tif
@@ -1480,7 +1480,8 @@ function [allOdorTrials, preplotdata] = getOdorTrials(preplotdata)
                                 - preplotdata.file(f).ephys.times(eind1);
                             preplotdata.file(f).ephys.odors(oo).trials(ttt).odor = preplotdata.file(f).ephys.odor(eind1:eind2);
                             preplotdata.file(f).ephys.odors(oo).trials(ttt).sniff = preplotdata.file(f).ephys.sniff(eind1:eind2);
-                            preplotdata.file(f).ephys.odors(oo).trials(ttt).puff = preplotdata.file(f).ephys.puff(eind1:eind2);
+                            preplotdata.file(f).ephys.odors(oo).trials(ttt).lick = preplotdata.file(f).ephys.lick(eind1:eind2);  %MW added Feb 2023
+                            preplotdata.file(f).ephys.odors(oo).trials(ttt).valence = preplotdata.file(f).ephys.valence(eind1:eind2);
                         end
                     end
                 end
@@ -2614,12 +2615,19 @@ function do_time_series_plot(preplotdata)
                                 ephyssniff = normalizeStimulus(plotdata{p}.file(nn).ephys.odors(oo).trials(tt).sniff,ymin-0.25*(ymax-ymin),ymin);
                                 line(ephystimes,ephyssniff,'LineStyle','-','Color','black');
                             end
-                            if ismember(4,get(findobj(tab,'Tag','ephys'),'Value')) %plot ephys puff
+                            if ismember(4,get(findobj(tab,'Tag','ephys'),'Value')) %plot ephys lick
                                 otherlines = otherlines+1;
                                 ephystimes = plotdata{p}.file(nn).ephys.odors(oo).trials(tt).times;
                                 %tcr - need to work on this puff is +-5volts, some trials are just noise
-                                ephyspuff = normalizeStimulus(plotdata{p}.file(nn).ephys.odors(oo).trials(tt).puff,ymin-0.25*(ymax-ymin),ymin);
-                                line(ephystimes,ephyspuff,'LineStyle','-','Color','magenta');
+                                ephyslick = normalizeStimulus(plotdata{p}.file(nn).ephys.odors(oo).trials(tt).lick,ymin-0.25*(ymax-ymin),ymin);
+                                line(ephystimes,ephyslick,'LineStyle','-','Color','magenta');
+                            end
+                            if ismember(5,get(findobj(tab,'Tag','ephys'),'Value')) %plot ephys valence
+                                otherlines = otherlines+1;
+                                ephystimes = plotdata{p}.file(nn).ephys.odors(oo).trials(tt).times;
+                                %tcr - need to work on this puff is +-5volts, some trials are just noise
+                                ephysvalence = normalizeStimulus(plotdata{p}.file(nn).ephys.odors(oo).trials(tt).valence,ymin-0.25*(ymax-ymin),ymin);
+                                line(ephystimes,ephysvalence,'LineStyle','-','Color','magenta');
                             end
                         end
                     end
@@ -2637,11 +2645,17 @@ function do_time_series_plot(preplotdata)
                     ephyssniff = normalizeStimulus(plotdata{p}.file(nn).ephys.sniff,ymin-0.25*(ymax-ymin),ymin);
                     line(ephystimes,ephyssniff,'LineStyle','-','Color','black');
                 end
-                if ismember(4,get(findobj(tab,'Tag','ephys'),'Value')) %plot ephys puff
+                if ismember(4,get(findobj(tab,'Tag','ephys'),'Value')) %plot ephys lick
                     otherlines = otherlines+1;
                     ephystimes = plotdata{p}.file(nn).ephys.times;
-                    ephyspuff = normalizeStimulus(plotdata{p}.file(nn).ephys.puff,ymin-0.25*(ymax-ymin),ymin);
-                    line(ephystimes,ephyspuff,'LineStyle','-','Color','magenta');
+                    ephyslick = normalizeStimulus(plotdata{p}.file(nn).ephys.lick,ymin-0.25*(ymax-ymin),ymin);
+                    line(ephystimes,ephyslick,'LineStyle','-','Color','magenta');
+                end
+                if ismember(5,get(findobj(tab,'Tag','ephys'),'Value')) %plot ephys valence
+                    otherlines = otherlines+1;
+                    ephystimes = plotdata{p}.file(nn).ephys.times;
+                    ephysvalence = normalizeStimulus(plotdata{p}.file(nn).ephys.valence,ymin-0.25*(ymax-ymin),ymin);
+                    line(ephystimes,ephysvalence,'LineStyle','-','Color','magenta');
                 end
             end
         end

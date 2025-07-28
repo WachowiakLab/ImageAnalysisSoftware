@@ -251,7 +251,7 @@ function CBLoad(~,~)
                 ext = '.xml'; %might try using uigetfolder for multiple files
                 [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'Off');
             case 'neuroplex'
-                ext = '.da';
+                ext = {'*.da;*.tsm','Neuroplex Files'};
                 [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'Off');
             case 'tif' %Standard .tif
                 ext = '.tif';
