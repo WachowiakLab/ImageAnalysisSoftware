@@ -10,6 +10,7 @@ function [allOdorTrials] = getAllOdorTrials(auxtype,prestimtime,poststimtime,mwf
 
 auxtypes = getauxtypes;
 imtimes = (0:(mwfile.frames-1))./ mwfile.frameRate;
+% assignin("base","imtimes",imtimes);
 if strcmp(auxtype,auxtypes{1}) %Aux1(odor)
     %note: the current approach includes all odors in allOdorTrials.odors (even if no valid trials),
     %and allows the odor order to be random (in order of presentation but not including repeats)
@@ -21,17 +22,21 @@ if strcmp(auxtype,auxtypes{1}) %Aux1(odor)
     numimframes = find(imtimes>(prestimtime+poststimtime), 1, 'first'); %total #frames to grab
     if isempty(numimframes); errordlg('prestimtime + poststimtime > totaltime'); return; end
     if isfield(mwfile,'aux1') && ~isempty(mwfile.aux1)
-        aux1 = mwfile.aux1.signal(1:length(stimtimes));
+        aux1 = mwfile.aux1.signal(1:length(stimtimes));%         
     else
         disp('Error: Aux1 signal not found'); return
     end
-    if isfield(mwfile,'aux3') && ~isempty(mwfile.aux3)
+%     if isfield(mwfile,'aux3') && ~isempty(mwfile.aux3)   %%original code
+%     pre-2025.
+    if isfield(mwfile,'aux3') && max(mwfile.aux3.signal) > 0.9   %mw edited code
         allOdorTrials.odors = mwfile.aux3.odors;
         aux3 = mwfile.aux3.signal(1:length(stimtimes));
+%         assignin("base","aux3",aux3);
     else
         allOdorTrials.odors = 0;
         aux3=aux1;
     end
+
     %find odornumbers for each trial from aux3
     %Our 8bit odor number encoding scheme is weird, but this is how we interpret the odor number signal...
     j=2; trial = 0; odor = []; %skipping first frame in case signal is on at scan start
@@ -64,6 +69,7 @@ if strcmp(auxtype,auxtypes{1}) %Aux1(odor)
     for o = 1:length(allOdorTrials.odors)
         allOdorTrials.odor(o).trials = []; %all valid trials for each odor (pre-post stim)
     end
+%     assignin('base',"allodortrials",allOdorTrials);
     t = zeros(length(allOdorTrials.odors),1); %t(o) indexes all trials for each odor,
     tt = zeros(length(allOdorTrials.odors),1); %tt(o) indexes all valid trials
     i=2; trial = 0; %skip first frame in case signal is on at scan start

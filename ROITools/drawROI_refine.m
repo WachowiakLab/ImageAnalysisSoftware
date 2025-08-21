@@ -38,12 +38,12 @@ hROI.polygonmethod =  uicontrol(hROI.fig,'Style','pushbutton','units','normalize
 uicontrol(hROI.fig,'Style','text','units','normalized','position',[.02 .92 .16 .04],'HorizontalAlignment','center',...
     'String',sprintf('<Click to create a polygon>\nUse "Esc" key to quit'));
 hROI.quickmethod =  uicontrol(hROI.fig,'Style','togglebutton','units','normalized','position',...
-    [0.19 .96 .16 .03],'String','Quick Square Method','Callback',@CBquicksquare);
+    [0.19 .96 .16 .03],'String','Quick Circle Method','Callback',@CBquicksquare);
 uicontrol(hROI.fig,'Style','text','units','normalized','position',[.19 .94 .16 .02],'HorizontalAlignment','center',...
     'String',sprintf('<Click to select a spot>'));
-uicontrol(hROI.fig,'Style','text','units','normalized','position',[.19 .91 .09 .02],'String','length/width (pixels):');
+uicontrol(hROI.fig,'Style','text','units','normalized','position',[.19 .91 .09 .02],'String','radius (pixels):');
 hROI.quicksize_edit = uicontrol(hROI.fig,'style','edit','units','normalized','position',[.28 .91 .06 .02],...
-    'BackgroundColor',[1 1 1],'String',10);
+    'BackgroundColor',[1 1 1],'String',4);
 hROI.thresholdmethod =  uicontrol(hROI.fig,'Style','togglebutton','units','normalized','position',...
     [.36 0.96 .16 .03],'String','Threshold Method','Callback',@CBthreshold);
 uicontrol(hROI.fig,'Style','text','units','normalized','position',[.36 .90 .18 .06],'HorizontalAlignment','center',...
@@ -343,9 +343,19 @@ function CBQuickClick(~,~)
     L = str2double(hROI.quicksize_edit.String); %side length
     if z(1)>hROI.newaxes.XLim(1) && z(2)>hROI.newaxes.YLim(1) && z(1)<hROI.newaxes.XLim(2) && z(2)<hROI.newaxes.YLim(2)
         hROI.newmask = zeros(size(ROIdata.bgimage));
-        ystart = max(1,z(2)-floor(L/2)); ystart = min(z(2)-floor(L/2),hROI.newaxes.YLim(2)-L);
-        xstart = max(1,z(1)-floor(L/2)); xstart = min(z(1)-floor(L/2),hROI.newaxes.XLim(2)-L);
-        hROI.newmask(ystart:ystart+L-1,xstart:xstart+L-1) = 1;
+%         ystart = max(1,z(2)-floor(L/2)); ystart = min(z(2)-floor(L/2),hROI.newaxes.YLim(2)-L);
+%         xstart = max(1,z(1)-floor(L/2)); xstart = min(z(1)-floor(L/2),hROI.newaxes.XLim(2)-L);
+%         hROI.newmask(ystart:ystart+L-1,xstart:xstart+L-1) = 1;  %normal code, should be 1.
+        
+        % try to make circular mask instead      
+   % Calculate the distance of each point from the center
+      imgdims=size(ROIdata.bgimage);
+      [rows, columns] = ndgrid(1:imgdims(1), 1:imgdims(2));
+      distanceFromCenter = sqrt((rows - z(1)).^2 + (columns - z(2)).^2);
+      assignin('base','dfc',distanceFromCenter);
+% Create the binary mask
+    hROI.newmask = double(distanceFromCenter <= L)';
+      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
         warning('off','MATLAB:contour:ConstantData');
         if hROI.bGray
             [~,newcontour] = contour(double(hROI.newmask), 1, 'LineColor','red');

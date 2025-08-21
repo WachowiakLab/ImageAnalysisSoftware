@@ -17,7 +17,7 @@ if ~isempty(prev); close(prev); end
 
 persistent oldpath; if isempty(oldpath); oldpath = ''; end
 typestr = getdatatypes; %{'scanimage', 'scanbox', 'prairie', 'neuroplex', 'tif'};
-auxstr = ['-Select Auxiliary Signal' getauxtypes']; %{'Aux1(odor)'; 'Aux2(sniff)'; 'AuxCombo(sniff w/odor)'; 'Define Stimulus Manually'}
+auxstr = ['-Select Auxiliary Signal' getauxtypes']; %{'Aux1(odor)'; 'Aux2(sniff)'; ''OdorID''; 'Define Stimulus Manually'}
 
 bDefaultSelectAllOdorTrials = 1;
 
@@ -260,7 +260,7 @@ function tabsetup(tab)
     uicontrol(stimpanel,'Tag','hidestim','Style', 'checkbox', 'Units', 'normalized', 'Position', ...
         [0.65 0.85 .35 0.12], 'String', 'Hide stimuli', 'Fontweight', 'Bold', 'Value', hidestimval, ...
         'Fontsize',10,'Callback', @CBSelectAndSortColors,'Enable','off')
-    ephysstr = {'-ephys signals-','odor','sniff','lick','valence'}; %MW modified feb 2023.
+    ephysstr = {'-ephys signals-','odor','sniff','lick','valence','velocity'}; %MW modified feb 2023.
     uicontrol(stimpanel,'Tag','ephys','Style','listbox','Units','normalized','Position', ...
         [0.65 0.45 .35 .4],'String',ephysstr,'Max',8,'Visible','off');
     uicontrol(stimpanel,'style','text','Units','normalized','Position',[0.05 0.33 .9 0.1],...
@@ -618,7 +618,7 @@ function CBaddFiles(~,~) %add image file(s) to list (and/or load scanbox realtim
             case 'scanimage' %ScanImage .tif (aka MWScope)
                 ext = {'*.tif;*.dat','Scanimage Files';'*.*','All Files'};
                 [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'On');
-            case 'scanbox'
+            case 'scanbox' %Scanbox file
                 ext = '.sbx';
                 [filename, pathname, ok] = uigetfile(ext, 'Select data file(s)', pathname, 'MultiSelect', 'On');
             case 'prairie'
@@ -740,7 +740,7 @@ function CBaddFiles(~,~) %add image file(s) to list (and/or load scanbox realtim
                         if isfield(sbxinfo,'event_id') && ~isempty(sbxinfo.event_id)
                             [TSdata.file(n).aux1,TSdata.file(n).aux2,TSdata.file(n).aux3] = loadScanboxStimulus(sbxinfo);
                         end
-                        %load ephys data - currently, scanbox is only type with ephys files
+                        %load ephys data - currently, scanbox and NP are only types with ephys files
                         if isfile(fullfile(TSdata.file(1).dir,[TSdata.file(1).name(1:end-4) '.ephys']))
                             TSdata.file(n).ephys = loadScanboxEphys(fullfile(TSdata.file(1).dir,[TSdata.file(1).name(1:end-4) '.ephys']));
                             if isempty(TSdata.file(n).ephys); TSdata.file(n)=rmfield(TSdata.file(n),'ephys'); end
@@ -910,6 +910,7 @@ function loadFileComputeTimeSeries(n) %load image file and compute time series (
     tmpname = TSdata.file(n).name;
     if strcmp(TSdata.file(n).type,'neuroplex')
         tmpdata = loadFile_MWLab(TSdata.file(n).type,TSdata.file(n).dir,tmpname,TSdata.aux2bncmap);
+        %assignin("base",'dataread',tmpdata);  %MW used for testing.
     else
         tmpdata = loadFile_MWLab(TSdata.file(n).type,TSdata.file(n).dir,tmpname);
     end
@@ -955,6 +956,11 @@ function loadFileComputeTimeSeries(n) %load image file and compute time series (
         if isfield(tmpdata,'aux3')
             TSdata.file(n).aux3 = tmpdata.aux3; TSdata.file(n+1).aux3 = tmpdata.aux3;
         end
+        %%%%Mw added for aux4
+        if isfield(tmpdata,'aux4')
+            TSdata.file(n).aux4 = tmpdata.aux4; TSdata.file(n+1).aux4 = tmpdata.aux4;
+        end
+        %%%%end MW added
         if isfield(tmpdata,'ephys')
             TSdata.file(n).ephys = tmpdata.ephys; TSdata.file(n+1).ephys = tmpdata.ephys;
         end
@@ -977,6 +983,11 @@ function loadFileComputeTimeSeries(n) %load image file and compute time series (
         if isfield(tmpdata,'aux3')
             TSdata.file(n).aux3 = tmpdata.aux3;
         end
+        %%%%Mw added for aux4
+        if isfield(tmpdata,'aux4')
+            TSdata.file(n).aux4 = tmpdata.aux4;
+        end
+        %%%end MW added part
         if isfield(tmpdata,'ephys')
             TSdata.file(n).ephys = tmpdata.ephys;
         end
@@ -1274,7 +1285,9 @@ function [allOdorTrials, preplotdata] = getPlotData
             end
         end
     end
+    %assignin("base",'TSdata',TSdata);  %MW added 
     for f = 1:length(files)
+        
         preplotdata.file(f).name = TSdata.file(files(f)).name;
         preplotdata.file(f).type = TSdata.file(files(f)).type;
         preplotdata.file(f).frameRate = TSdata.file(files(f)).frameRate;
@@ -1331,6 +1344,11 @@ function [allOdorTrials, preplotdata] = getPlotData
                 preplotdata.file(f).aux3.times = TSdata.file(files(f)).aux3.times;
                 preplotdata.file(f).aux3.signal = TSdata.file(files(f)).aux3.signal;
                 preplotdata.file(f).aux3.odors = TSdata.file(files(f)).aux3.odors;
+            end
+            %%%MW added to deal with aux4
+            if isfield(TSdata.file(files(f)),'aux4') && ~isempty(TSdata.file(files(f)).aux4)
+                preplotdata.file(f).aux4.times = TSdata.file(files(f)).aux4.times;
+                preplotdata.file(f).aux4.signal = TSdata.file(files(f)).aux4.signal;
             end
         if get(findobj(tab,'Tag','stimselect'),'Value') == 4
             preplotdata.file(f).aux_combo.times = TSdata.file(files(f)).aux_combo.times;
@@ -1482,6 +1500,9 @@ function [allOdorTrials, preplotdata] = getOdorTrials(preplotdata)
                             preplotdata.file(f).ephys.odors(oo).trials(ttt).sniff = preplotdata.file(f).ephys.sniff(eind1:eind2);
                             preplotdata.file(f).ephys.odors(oo).trials(ttt).lick = preplotdata.file(f).ephys.lick(eind1:eind2);  %MW added Feb 2023
                             preplotdata.file(f).ephys.odors(oo).trials(ttt).valence = preplotdata.file(f).ephys.valence(eind1:eind2);
+                            %if isfield(preplotdata, 'velocity')
+                            preplotdata.file(f).ephys.odors(oo).trials(ttt).velocity = preplotdata.file(f).ephys.velocity(eind1:eind2);
+                            %end
                         end
                     end
                 end
@@ -2597,6 +2618,7 @@ function do_time_series_plot(preplotdata)
     otherlines = 0;
     if strcmp(get(findobj(tab,'Tag','ephys'),'Visible'), 'on') &&  min(get(findobj(tab,'Tag','ephys'),'Value'))>1 ...
             && ~get(findobj(tab,'Tag','hidestim'),'Value')
+        %assignin("base","plotdata",plotdata);
         %go through entire loop as above
         for nn = 1:length(plotdata{p}.file)
             if bsuperimpose || bavgtrials
@@ -2629,6 +2651,14 @@ function do_time_series_plot(preplotdata)
                                 ephysvalence = normalizeStimulus(plotdata{p}.file(nn).ephys.odors(oo).trials(tt).valence,ymin-0.25*(ymax-ymin),ymin);
                                 line(ephystimes,ephysvalence,'LineStyle','-','Color','magenta');
                             end
+                            if ismember(6,get(findobj(tab,'Tag','ephys'),'Value')) %plot ephys velocity
+                                otherlines = otherlines+1;
+                                ephystimes = plotdata{p}.file(nn).ephys.odors(oo).trials(tt).times;
+                                %tcr - need to work on this puff is +-5volts, some trials are just noise
+                                ephysvelocity = normalizeStimulus(plotdata{p}.file(nn).ephys.odors(oo).trials(tt).velocity,ymin-0.25*(ymax-ymin),ymin);
+                                %ephysvelocity = normalizeStimulus(plotdata{p}.file(nn).ephys.velocity,ymin-0.25*(ymax-ymin),ymin);
+                                line(ephystimes,ephysvelocity,'LineStyle','-','Color','blue');
+                            end
                         end
                     end
                 end
@@ -2656,6 +2686,12 @@ function do_time_series_plot(preplotdata)
                     ephystimes = plotdata{p}.file(nn).ephys.times;
                     ephysvalence = normalizeStimulus(plotdata{p}.file(nn).ephys.valence,ymin-0.25*(ymax-ymin),ymin);
                     line(ephystimes,ephysvalence,'LineStyle','-','Color','magenta');
+                end
+                if ismember(6,get(findobj(tab,'Tag','ephys'),'Value')) %plot ephys velocity
+                    otherlines = otherlines+1;
+                    ephystimes = plotdata{p}.file(nn).ephys.times;
+                    ephysvelocity = normalizeStimulus(plotdata{p}.file(nn).ephys.velocity,ymin-0.25*(ymax-ymin),ymin);
+                    line(ephystimes,ephysvelocity,'LineStyle','-','Color','blue');
                 end
             end
         end

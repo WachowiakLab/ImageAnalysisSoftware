@@ -1,7 +1,7 @@
 function [] = avgNeuroplexFilesGUI()
 %select and average neuroplex odor files
 
-[filenames,filepath] = uigetfile('*.da','****Select Raw Data Neuroplex Files****','MultiSelect','on');
+[filenames,filepath] = uigetfile('*.tsm','****Select Raw Data .tsm Files****','MultiSelect','on');
 if ~iscellstr(filenames); return; end
 [listname,listpath] = uigetfile('*.txt','****Select Odor Number/Name List****');
 listfid = fopen(fullfile(listpath,listname));

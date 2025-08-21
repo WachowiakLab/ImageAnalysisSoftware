@@ -1,0 +1,33 @@
+% Open file dialog to select a binary file
+% as of Sept 2024 - ch 1 = lick; ch 2 = valence; ch 3 = reward; ch 4 = sniff; ch 5 = odor; ch 6 - velocity  
+[fileName, filePath] = uigetfile({'*.*', 'All Files'}, 'Select a Binary File');
+
+% Check if a file was selected
+if isequal(fileName, 0)
+    disp('No file selected');
+else
+    % Full path to the file
+    fullFileName = fullfile(filePath, fileName);
+    
+    % Display the selected file name
+    disp(['File selected: ', fullFileName]);
+    fileID = fopen(fullFileName);  
+    headerints=fread(fileID,250,'unsigned char');
+    endofheader=find(headerints==77);
+    if endofheader
+     fseek(fileID,endofheader,'bof'); %skip text info and read acquisition params
+    else fseek(fileID, 'bof'); %newer files post-Sept 2024 will have no header
+    end
+    convfactor=fread(fileID,[1 1],'int16');  %conversion factor
+    numchans=fread(fileID,[1 1],'int16');  %number of channels
+    numbytesperdatapt=fread(fileID,[1 1],'int16');  %size of datapt
+    samplerate=fread(fileID,[1 1],'int16');  %sample rate
+    testzero=fread(fileID,[1 1],['int16' ...
+        '']); %zero for some reason
+    behavdata = fread(fileID,[numchans inf],'int16','b');
+    fclose(fileID);
+end
+
+
+
+

@@ -20,3 +20,13 @@ Aug 2023 updates:
 - added 'Merge ROIs' button to ImageAnalysis, which merges all selected ROIs into a single, new, ROI.
 
 - 'loadScanData' updated to show scanbox info in the Info box.
+
+Note: no updates cataloged until Feb 2025! Here are major ones that I can think of (MW):
+
+1. All modules now reads .tsm files now as well as Neuroplex files. Dialog box confirms mapping of BNC channels to various AUX signals. Note that new .tsm files only have 4 BNCs, so choosing any higher # will give an error.
+
+2. Version 'TimeSeriesAnalysis_MWLab_roi2sniff' allows for a chosen ROI to be substituted as the sniff signal, useful for doign sniff-based alignment using a given glomerulus. This is exported into BehaviorAnalysis form TImeSeries. But also not that chossing this is not reversible in the GUI!
+
+3. When loading newer *.tsm files that have behavior/valence info, have the option to make valence encoded as odornum (S+ = odor 1, S- = odor 0). THis is the default in the pop-up box. Choosse 'no' if have odorgun encoding in the *.tsm file.
+
+4. Also note that can do this with scanbox data s well, but need to uncomment the code that generates this pop-up dialog, in the script 'loadScanbox.m' to make this dialog box pop up.

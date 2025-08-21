@@ -238,7 +238,9 @@ function CBgetsniffs(~,~)
     %notes:
     %MinPeriod = hMPD.Value*samp_rate;
     %MinWidth = hMPW.Value*samp_rate;
-    %MaxWidth = hMxPW.Value*samp_rate;    
+    %MaxWidth = hMxPW.Value*samp_rate;
+
+    
     findpeaks_mwlab(hAx,times,Ztemp,'MinPeakHeight',hMPH.Value,'MinPeakProminence',hMPP.Value,...
         'MinPeakDistance',hMPD.Value*samp_rate,'MinPeakWidth',hMPW.Value*samp_rate,'MaxPeakWidth',hMxPW.Value*samp_rate,'Annotate','extents');
 %     plot(hAx,times,Ztemp); plot(hAx,times(locs),pks,'o');

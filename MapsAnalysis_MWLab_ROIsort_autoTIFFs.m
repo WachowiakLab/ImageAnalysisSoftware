@@ -2422,18 +2422,24 @@ function CB_ORfile(~,~)
             roivsodordata(r,t) = mean(tmpdata(:));
         end
     end
+    
+    %%%note from MW: this adds odornums to OR file, but orderinghas to
+    %%%match ordering of odors in first file loaded! Will not work if have
+    %%%different odor nums in different files.
     for o = 1:size(figdata{tabnum}.im,3)
-        tmpind = strfind(figdata{tabnum}.title{o},'/');
+        tmpind = strfind(figdata{tabnum}.title{o},'/');        
         odorlist{o} = figdata{tabnum}.title{o}(tmpind(1)+1:tmpind(2)-1);
-%         odorlist{o} = sprintf('odor %d',o);
+%       odorlist{o} = sprintf('odor %d',o);
         maps{o} = figdata{tabnum}.im(:,:,o);
         metadata{o} = [figdata{tabnum}.ImageDescription ...
             sprintf('\nTitle: %s;',figdata{tabnum}.title{o}) ...
             sprintf('\nDetails: %s;',figdata{tabnum}.details{o})];
-    end
+     end
+    
     ORdata.RefImage = regdata.file.im;
     ORdata.RespMatrix = roivsodordata;
     ORdata.OdorList = odorlist;
+    ORdata.Odornums = figdata{tabnum}.file(1).odors; 
     ORdata.ROIPos = ROIpositions;
     ORdata.Maps = maps;
     ORdata.Reg = registration;

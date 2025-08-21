@@ -53,4 +53,15 @@ if nout > 0
     if isfield(iminfo,'event_id') && ~isempty(iminfo.event_id)
         [varargout{1},varargout{2},varargout{3}] = loadScanboxStimulus(iminfo); % gets auxillary inputs (odor, sniff)
     end
+
+%     %TCR:March,2023 - set up valence to odor conversion here! Just
+%     %uncomment to implement.
+%     aux3 = varargout{3};
+%     if aux3.odors == 0  && ~isempty(ephys) %Only works if no odors are present & ephys exists
+%         bTmp = questdlg("Do you want to use the ePhys.Valence signal to encode odors?");
+%         if bTmp
+%             [newAux3]= ePhysValence2Odors(aux3,ephys);
+%             varargout{3} = newAux3;
+%         end
+%     end
 end

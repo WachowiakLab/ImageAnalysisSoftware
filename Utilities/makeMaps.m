@@ -14,6 +14,7 @@ function Maps = makeMaps(tmpdata, stim2use, baseTimes, respTimes, varargin)
 %   baseTimes: time window(sec) around stimulus used to average baseline images, example [-3.0 0.0]
 %   respTimes: time window(sec) around stimulus used to average response images, example [0.5 3.5]
 
+assignin("base",'tmpdata',tmpdata);
 if isempty(tmpdata.im); fprintf('tmpdata must include image stack (load using loadFileMWLab)'); return; end
 if iscell(tmpdata.im); fprintf('tmpdata.im cannot be a cell, separate channels into files'); return; end
 Maps.file.type = tmpdata.type; Maps.file.name = tmpdata.name; Maps.file.dir = tmpdata.dir;
@@ -30,7 +31,8 @@ half = (imTimes(2)-imTimes(1))/2; % half Frame (sec), used to grab frame if stim
 if strcmp(Maps.stim2use,stimstr{1}) %aux1
     if ~isfield(tmpdata,'aux1'); disp('aux1 signal not found'); return; end
     aux1 = tmpdata.aux1.signal; stimtimes = tmpdata.aux1.times;
-    if isfield(tmpdata,'aux3') && ~isempty(tmpdata.aux3)
+    %if isfield(tmpdata,'aux3') && ~isempty(tmpdata.aux3)   %original code
+    if isfield(tmpdata,'aux3') && max(tmpdata.aux3.signal) > 0.9    %new code
         Maps.file.odors = sort(tmpdata.aux3.odors);
         aux3 = tmpdata.aux3.signal;
     else

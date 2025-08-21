@@ -1,0 +1,77 @@
+function [] = ratioTSMFiles(trigflag);
+%select and average neuroplex odor files
+%first frame is 470 nm frame at present.
+%note that need to open at least two files......
+%also note that will NOT overwrite exisiting files!
+
+[filenames,filepath] = uigetfile('*.tsm','****Select Raw Data TSM Files****','MultiSelect','on');
+if ~iscellstr(filenames); return; end
+for f = 1:length(filenames)
+    dat=[];
+    disp(f);
+    %filenames{f};
+    %imfile=filenames{f};
+    sizeA = 2880; % # of integers of header info
+    %just copy the tbn file with the new name
+    [tmppath,tmpname,~] = fileparts(filenames{f});
+    origfile=fullfile(filepath,[tmpname,'.tbn']);
+    newfile= fullfile(filepath,['r_', tmpname,'.tbn']);
+    [status, msg] = copyfile(origfile, newfile);
+    
+%%%%%%%%%%%%%%%%
+    tsmfid = fopen(fullfile(filepath,filenames{f}));
+    header_orig = fread(tsmfid, sizeA,'uint8');
+    header = char(header_orig);
+    dat = fread(tsmfid, inf, 'int16'); %read rest of data until end.
+    fclose(tsmfid);
+    
+    %next, parse header
+    for i = 1:36
+        %headers consist of 36x80byte "cards" w/keyword, value, (optional comment)
+        %last keyword is "END", the rest of header is empty
+        ctmp = textscan(header(i*80-79:i*80),'%s %s','Delimiter','=');
+        if ~isempty(ctmp{1}) && ~isequal(strip(ctmp{1}{1}),'END')
+            iminfo.(strip(ctmp{1}{1})) = strip(ctmp{2}{1});
+        end
+    end
+    iminfo.frames = str2double(iminfo.NAXIS3);
+    numframes=iminfo.frames;
+    xpix = str2double(iminfo.NAXIS1);
+    ypix = str2double(iminfo.NAXIS2);
+    iminfo.size = [ypix,xpix];
+    numpix=ypix*xpix;
+    deltaT = str2double(iminfo.EXPOSURE);
+    darkframe=dat(numpix*300+1:numpix*301);  %darkframe is at end; subtract this from all other frames as they are read.
+    frnum=0;
+    %datframes=resize(dat,nframes,xpix,ypix)
+    %%%% data org = frame 1, pixel index, then frame 2, pixel
+    %%%%index, etc. dark frame is at end.  
+    pixcount=0;
+    newdatastream=[];
+    for g = 1:iminfo.frames/2;        
+        fr470 = dat(pixcount+1:pixcount+numpix);
+        pixcount=pixcount+numpix;
+        %fr470=fr470-darkframe; %subtract darkframe 
+        fr405 = dat(pixcount+1:pixcount+numpix);
+        fr405(find(fr405==0))=0.001; %just take care of any zero values (unlikely) to avoid infinite ratio
+        pixcount=pixcount+numpix;
+        %fr405=fr405-darkframe; %subtract darkframe. Later, want to set all to zero?
+        
+        fr_ratio=fr470./fr405; %simply calculate ratio here. 
+        newdatastream=vertcat(newdatastream, fr_ratio,fr_ratio); %for now, just make two subseuqnet frames equal to ratio (or diff) of the pair
+        %max(newdatastream)
+        %so don't have to deal with changing frame rate or BNC signals or
+        %num of frames.
+    end    
+    scalefactor=prctile(dat,95)/prctile(newdatastream,95); %calculate difference in range relative to original dataset - for storage as ints.
+    newdatastream=newdatastream*scalefactor;  %scale ratios to same range as max of original datastream.
+    darkframe=darkframe*0; %set darkframe to zero.
+              
+    newtsmfid = fopen(fullfile(filepath,['r_', filenames{f}]),'w');
+    fwrite(newtsmfid,header_orig,'uint8');
+    fwrite(newtsmfid,newdatastream,'uint16');
+    fwrite(newtsmfid,darkframe,'uint16');
+    fclose(newtsmfid);
+end
+
+end

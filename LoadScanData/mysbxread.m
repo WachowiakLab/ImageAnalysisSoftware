@@ -17,7 +17,6 @@ function [x,sbxinfo] = mysbxread(fname,k,N,varargin)
 
 tmp = load(fname);
 sbxinfo = tmp.info;
-global info_loaded info
 
 if(~isfield(sbxinfo,'sz'))
     sbxinfo.sz = [512 796];    % it was only sz = ....
@@ -92,7 +91,5 @@ else
     x = [];
 end
 % for bidirectional scan, make bright bands where data was not acquired into dark bands
-%if(sbxinfo.scanmode==0); x(x>=65535)=0; end  %mw commented out to avoid
-%saturated pixels being zero
-
+%if(sbxinfo.scanmode==0); x(x>=65535)=0; end   %can comment this out if desired...
 fclose(sbxinfo.fid);

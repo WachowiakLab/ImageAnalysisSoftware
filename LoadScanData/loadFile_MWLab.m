@@ -90,13 +90,14 @@ switch datatype
         MWfile.size = tmpinfo.size; MWfile.frames = tmpinfo.frames; MWfile.frameRate = tmpinfo.frameRate;
     case 'neuroplex'
         if nargin > 3
-            [MWfile.im,tmpinfo,MWfile.aux1,MWfile.aux2,MWfile.aux3] = ...
+            [MWfile.im,tmpinfo,MWfile.aux1,MWfile.aux2,MWfile.aux3,MWfile.aux4,MWfile.ephys] = ...  %MW modified 08/14. Ned to see if this works?
                 loadNeuroplex(fullfile(MWfile.dir,MWfile.name),aux2bncmap);
         else
-            [MWfile.im,tmpinfo,MWfile.aux1,MWfile.aux2,MWfile.aux3] = ...
+            [MWfile.im,tmpinfo,MWfile.aux1,MWfile.aux2,MWfile.aux3,MWfile.aux4] = ...
                 loadNeuroplex(fullfile(MWfile.dir,MWfile.name));
         end
         if isempty(MWfile.aux3); MWfile = rmfield(MWfile,'aux3'); end
+        if isempty(MWfile.aux4); MWfile = rmfield(MWfile,'aux4'); end
         MWfile.size = tmpinfo.size; MWfile.frames = tmpinfo.frames; MWfile.frameRate = tmpinfo.frameRate;
     case 'tif'
         wait = waitbar(1/numel(MWfile.name),'Loading File');

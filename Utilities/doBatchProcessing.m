@@ -8,13 +8,16 @@ fnames = {''};
 
 %%settings - adjust as desired based on your preliminary image analysis
 %alignment settings, note: only do AlignMeanImages_MWLab.m if all the images are of the same field-of-view/magnification/etc.
-bAlignFiles = true; %align image frames within each file (see AlignImages_MWLab.m)
+bAlignFiles = false; %align image frames within each file (see AlignImages_MWLab.m)
 bAlignMeanFiles= false; %align mean images across all files (see AlignMeanImages_MWLab.m)
 
 %time series settings
 bComputeTSdata = false; %compute ROI timeseries data if ROIs file is available
 roispath = ''; %path of rois file (optional) - you will select rois file if bComputeTSdata = true and this is empty
 roisfile = ''; %name of rois file (optional) - you will select rois file if bComputeTSdata = true and this is empty
+
+%writetoTiff settings
+convert2tiff=true;
 
 %difference maps settings
 bMakeMaps = false; %make difference maps data struct (MapsData - see MapsAnalysis for more info)
@@ -65,6 +68,13 @@ if isempty(fpath) || isempty(fnames{1})
 end
 if strcmp(datatype,typestr{4}) %neuroplex, get bnc map
     aux2bncmap = assignNeuroplexBNC;
+end
+
+%do write2tiff if true
+if convert2tiff 
+     for f = 1:numel(fnames)
+        newfilename = loadFile_maketiffMWLab(datatype,fpath,fnames{f},aux2bncmap);
+     end
 end
 
 %load rois file  - this is used for all files (could put it in loop and have different rois for each file)
